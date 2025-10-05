@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { initDB, sql } from "./config/db.js";
 import rateLimiter from "./middleware/rateLimiter.js";
 
-import transactionRoute from "../backend/routes/transactionRoute.js";
+import transactionRoute from "../src/routes/transactionRoute.js";
 
 dotenv.config();
 
