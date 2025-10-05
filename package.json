@@ -1,5 +1,12 @@
 {
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "@types/react": "~19.1.10",
+    "nodemon": "^3.1.10",
+    "typescript": "~5.9.2"
+  },
+  "dependencies": {
+    "expo": "^54.0.12",
+    "react-dom": "19.1.0",
+    "react-native-web": "^0.21.0"
   }
 }
