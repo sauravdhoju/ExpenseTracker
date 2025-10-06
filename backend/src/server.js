@@ -1,7 +1,7 @@
 // const express = require("express")
 import express from "express";
 import dotenv from "dotenv";
-import { initDB, sql } from "./config/db.js";
+import { initDB } from "./config/db.js";
 import rateLimiter from "./middleware/rateLimiter.js";
 
 import transactionRoute from "../src/routes/transactionRoute.js";
@@ -20,7 +20,7 @@ app.use(express.json());
 const PORT = process.env.PORT
 
 
-app.get("/", (req,res) => {
+app.get("/", (req, res) => {
   res.send("Its working")
 })
 
