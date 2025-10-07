@@ -1,6 +1,6 @@
 // styles/home.styles.js
-import { StyleSheet } from "react-native";
-import { COLORS } from "../../constants/colors";
+import { StyleSheet } from 'react-native';
+import { COLORS } from '../../constants/colors';
 
 export const styles = StyleSheet.create({
   container: {
@@ -12,17 +12,17 @@ export const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
     paddingHorizontal: 0,
     paddingVertical: 12,
   },
   headerLeft: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerLogo: {
     width: 75,
@@ -38,17 +38,17 @@ export const styles = StyleSheet.create({
   },
   usernameText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: COLORS.text,
   },
   headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: COLORS.text,
   },
   addButton: {
@@ -56,9 +56,9 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    shadowColor: "#000",
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -66,14 +66,14 @@ export const styles = StyleSheet.create({
   },
   addButtonText: {
     color: COLORS.white,
-    fontWeight: "600",
+    fontWeight: '600',
     marginLeft: 4,
   },
   logoutButton: {
     padding: 10,
     borderRadius: 20,
     backgroundColor: COLORS.card,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -100,17 +100,17 @@ export const styles = StyleSheet.create({
   },
   balanceAmount: {
     fontSize: 32,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: COLORS.text,
     marginBottom: 20,
   },
   balanceStats: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   balanceStatItem: {
     flex: 1,
-    alignItems: "center",
+    alignItems: 'center',
   },
   statDivider: {
     borderRightWidth: 1,
@@ -123,11 +123,11 @@ export const styles = StyleSheet.create({
   },
   balanceStatAmount: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
     color: COLORS.text,
     marginBottom: 15,
   },
@@ -135,8 +135,8 @@ export const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: 12,
     marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     shadowColor: COLORS.shadow,
     shadowOffset: {
       width: 0,
@@ -148,17 +148,17 @@ export const styles = StyleSheet.create({
   },
   transactionContent: {
     flex: 1,
-    flexDirection: "row",
+    flexDirection: 'row',
     padding: 15,
-    alignItems: "center",
+    alignItems: 'center',
   },
   categoryIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   transactionLeft: {
@@ -166,7 +166,7 @@ export const styles = StyleSheet.create({
   },
   transactionTitle: {
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: '500',
     color: COLORS.text,
     marginBottom: 4,
   },
@@ -175,11 +175,11 @@ export const styles = StyleSheet.create({
     color: COLORS.textLight,
   },
   transactionRight: {
-    alignItems: "flex-end",
+    alignItems: 'flex-end',
   },
   transactionAmount: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     marginBottom: 4,
   },
   transactionDate: {
@@ -196,16 +196,16 @@ export const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: COLORS.background,
   },
   emptyState: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
     padding: 30,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 10,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 1 },
@@ -218,25 +218,25 @@ export const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
     color: COLORS.text,
     marginBottom: 8,
   },
   emptyStateText: {
     color: COLORS.textLight,
     fontSize: 14,
-    textAlign: "center",
+    textAlign: 'center',
     marginBottom: 20,
     lineHeight: 20,
   },
   emptyStateButton: {
     backgroundColor: COLORS.primary,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -244,13 +244,13 @@ export const styles = StyleSheet.create({
   },
   emptyStateButtonText: {
     color: COLORS.white,
-    fontWeight: "600",
+    fontWeight: '600',
     marginLeft: 6,
   },
   transactionsHeaderContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
     paddingBottom: 5,
   },

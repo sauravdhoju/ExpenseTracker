@@ -1,14 +1,14 @@
 // const express = require("express")
-import express from "express";
-import dotenv from "dotenv";
-import { initDB } from "./config/db.js";
-import rateLimiter from "./middleware/rateLimiter.js";
+import express from 'express';
+import dotenv from 'dotenv';
+import { initDB } from './config/db.js';
+import rateLimiter from './middleware/rateLimiter.js';
 
-import transactionRoute from "../src/routes/transactionRoute.js";
+import transactionRoute from '../src/routes/transactionRoute.js';
 
 dotenv.config();
 
-const app = express()
+const app = express();
 //middlerwear
 app.use(rateLimiter);
 app.use(express.json());
@@ -17,17 +17,16 @@ app.use(express.json());
 //   next();
 // })
 
-const PORT = process.env.PORT
+const PORT = process.env.PORT;
 
+app.get('/', (req, res) => {
+  res.send('Its working');
+});
 
-app.get("/", (req, res) => {
-  res.send("Its working")
-})
-
-app.use("/api/transaction", transactionRoute)
+app.use('/api/transaction', transactionRoute);
 
 initDB().then(() => {
   app.listen(PORT, () => {
-    console.log("Server is up and running on PORT: 5001");
+    console.log('Server is up and running on PORT: 5001');
   });
 });
