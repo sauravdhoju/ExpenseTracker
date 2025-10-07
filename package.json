@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "expo": "^54.0.12",
+    "expo-secure-store": "^15.0.7",
     "react-dom": "19.1.0",
     "react-native-web": "^0.21.0"
   }
