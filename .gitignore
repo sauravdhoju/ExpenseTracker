@@ -1,1 +1,4 @@
 .env
+# Ignore Expo generated files
+.expo
+node_modules
