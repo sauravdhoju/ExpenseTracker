@@ -4,7 +4,7 @@ import { useSignUp } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { styles } from '@/assets/styles/auth.styles.js';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors.js';
+import { COLORS } from '../../constants/colors';
 import { Image } from 'expo-image';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
@@ -17,6 +17,7 @@ export default function SignUpScreen() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+
   // Handle submission of sign-up form
   const onSignUpPress = async () => {
     if (!isLoaded) return;
@@ -38,8 +39,9 @@ export default function SignUpScreen() {
       if (err.errors?.[0]?.code === 'form_identifier_exists') {
         setError('That email address is already in use. Please try another.');
       } else {
-        setError('An error occured. Please try again.');
+        setError('An error occurred. Please try again.');
       }
+      console.log(err);
     }
   };
 
@@ -89,8 +91,10 @@ export default function SignUpScreen() {
           style={[styles.verificationInput, error && styles.errorInput]}
           value={code}
           placeholder="Enter your verification code"
+          placeholderTextColor="#9A8478"
           onChangeText={(code) => setCode(code)}
         />
+
         <TouchableOpacity onPress={onVerifyPress} style={styles.button}>
           <Text style={styles.buttonText}>Verify</Text>
         </TouchableOpacity>
@@ -107,9 +111,10 @@ export default function SignUpScreen() {
     >
       <View style={styles.container}>
         <Image
-          source={require('../../assets/images/createAccount.png')}
+          source={require('../../assets/images/revenue-i2.png')}
           style={styles.illustration}
         />
+
         <Text style={styles.title}>Create Account</Text>
 
         {error ? (
@@ -145,7 +150,7 @@ export default function SignUpScreen() {
         </TouchableOpacity>
 
         <View style={styles.footerContainer}>
-          <Text style={styles.footerText}>Already have an account</Text>
+          <Text style={styles.footerText}>Already have an account?</Text>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.linkText}>Sign in</Text>
           </TouchableOpacity>
