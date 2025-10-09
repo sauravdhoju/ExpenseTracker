@@ -27,9 +27,9 @@ app.get('/api/health', (res, req) => {
   res.status(200).json({ status: 'ok' });
 });
 
-app.get('/', (req, res) => {
-  res.send('Its working');
-});
+// app.get('/', (res, req) => {
+//   res.send('Its working');
+// });
 
 app.use('/api/transaction', transactionRoute);
 
