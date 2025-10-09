@@ -5,10 +5,14 @@ import { initDB } from './config/db.js';
 import rateLimiter from './middleware/rateLimiter.js';
 
 import transactionRoute from '../src/routes/transactionRoute.js';
+import job from './config/cron.js';
 
 dotenv.config();
 
 const app = express();
+
+if (process.env.NODE_ENV === 'production') job.start();
+
 //middlerwear
 app.use(rateLimiter);
 app.use(express.json());
@@ -18,6 +22,10 @@ app.use(express.json());
 // })
 
 const PORT = process.env.PORT;
+
+app.get('/api/health', (res, req) => {
+  res.status(200).json({ status: 'ok' });
+});
 
 app.get('/', (req, res) => {
   res.send('Its working');
