@@ -50,7 +50,7 @@ export default function NotificationsScreen() {
             <View style={{ flex: 1, marginLeft: spacing.sm }}>
               <Text style={{ fontSize: 15, color: colors.text }}>Bill & budget reminders</Text>
               <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
-                Local notifications for upcoming bills and budget warnings
+                Local notifications for upcoming bills, budget warnings, and a daily nudge to log your expenses
               </Text>
             </View>
             <Ionicons
