@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "ETracko",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,6 +11,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.sauravdhoju.expensetracker",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -47,6 +48,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a80acc32-d28e-45f4-be9c-d0242a31dc6c"
+      }
+    },
+    "owner": "sauravdhoju"
   }
 }
