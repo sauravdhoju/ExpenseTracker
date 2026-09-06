@@ -22,6 +22,24 @@ export function isSameMonth(isoDate: string, date: Date): boolean {
   return isoDate.slice(0, 7) === monthKey(date);
 }
 
+export function isSameDay(isoDate: string, date: Date): boolean {
+  return isoDate === toISODate(date);
+}
+
+export function startOfWeek(date: Date): Date {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayOffset = (d.getDay() + 6) % 7; // Monday = 0
+  d.setDate(d.getDate() - dayOffset);
+  return d;
+}
+
+export function isSameWeek(isoDate: string, date: Date): boolean {
+  const start = startOfWeek(date);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return isoDate >= toISODate(start) && isoDate <= toISODate(end);
+}
+
 export function addMonths(date: Date, count: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + count, 1);
 }

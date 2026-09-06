@@ -8,6 +8,7 @@ import * as recurringRepo from '../database/recurringRepo';
 import * as billRepo from '../database/billRepo';
 import * as goalRepo from '../database/goalRepo';
 import * as settingsRepo from '../database/settingsRepo';
+import * as shortcutRepo from '../database/shortcutRepo';
 import { processDueRecurringTransactions } from '../services/recurringService';
 import type {
   Account,
@@ -17,6 +18,7 @@ import type {
   Category,
   Goal,
   RecurringTransaction,
+  Shortcut,
   Transaction,
 } from '../types';
 
@@ -29,6 +31,7 @@ interface AppState {
   recurring: RecurringTransaction[];
   bills: Bill[];
   goals: Goal[];
+  shortcuts: Shortcut[];
   settings: AppSettings;
 
   bootstrap: () => Promise<void>;
@@ -63,6 +66,11 @@ interface AppState {
   contributeToGoal: (id: string, amount: number) => Promise<void>;
   removeGoal: (id: string) => Promise<void>;
 
+  addShortcut: (input: shortcutRepo.CreateShortcutInput) => Promise<Shortcut>;
+  editShortcut: (id: string, input: shortcutRepo.CreateShortcutInput) => Promise<void>;
+  removeShortcut: (id: string) => Promise<void>;
+  reorderShortcuts: (orderedIds: string[]) => Promise<void>;
+
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>;
 }
 
@@ -77,6 +85,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   recurring: [],
   bills: [],
   goals: [],
+  shortcuts: [],
   settings: settingsRepo.DEFAULT_SETTINGS,
 
   bootstrap: async () => {
@@ -93,7 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshAll: async () => {
-    const [accounts, categories, transactions, budgets, recurring, bills, goals, settings] =
+    const [accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, settings] =
       await Promise.all([
         accountRepo.getAllAccounts(),
         categoryRepo.getAllCategories(),
@@ -102,9 +111,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         recurringRepo.getAllRecurring(),
         billRepo.getAllBills(),
         goalRepo.getAllGoals(),
+        shortcutRepo.getAllShortcuts(),
         settingsRepo.getAllSettings(),
       ]);
-    set({ accounts, categories, transactions, budgets, recurring, bills, goals, settings });
+    set({ accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, settings });
   },
 
   addAccount: async (input) => {
@@ -203,6 +213,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   removeGoal: async (id) => {
     await goalRepo.deleteGoal(id);
+    await get().refreshAll();
+  },
+
+  addShortcut: async (input) => {
+    const shortcut = await shortcutRepo.createShortcut(input);
+    await get().refreshAll();
+    return shortcut;
+  },
+  editShortcut: async (id, input) => {
+    await shortcutRepo.updateShortcut(id, input);
+    await get().refreshAll();
+  },
+  removeShortcut: async (id) => {
+    await shortcutRepo.deleteShortcut(id);
+    await get().refreshAll();
+  },
+  reorderShortcuts: async (orderedIds) => {
+    await shortcutRepo.reorderShortcuts(orderedIds);
     await get().refreshAll();
   },
 

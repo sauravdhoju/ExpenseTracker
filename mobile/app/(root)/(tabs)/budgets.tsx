@@ -11,7 +11,6 @@ import PageHeader from '../../../src/components/ui/PageHeader';
 import ProgressBar from '../../../src/components/ui/ProgressBar';
 import EmptyState from '../../../src/components/ui/EmptyState';
 import Button from '../../../src/components/ui/Button';
-import type { BudgetPeriod } from '../../../src/types';
 
 export default function BudgetsScreen() {
   const colors = useThemeColors();
@@ -25,7 +24,6 @@ export default function BudgetsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
-  const [period, setPeriod] = useState<BudgetPeriod>('monthly');
 
   const monthTransactions = useMemo(() => filterByMonth(transactions, new Date()), [transactions]);
   const expenseCategories = categories.filter((c) => c.kind === 'expense');
@@ -34,14 +32,12 @@ export default function BudgetsScreen() {
   const openNew = () => {
     setCategoryId(null);
     setAmount('');
-    setPeriod('monthly');
     setModalVisible(true);
   };
 
-  const openEdit = (id: string | null, existingAmount: number, existingPeriod: BudgetPeriod) => {
+  const openEdit = (id: string | null, existingAmount: number) => {
     setCategoryId(id);
     setAmount(String(existingAmount));
-    setPeriod(existingPeriod);
     setModalVisible(true);
   };
 
@@ -51,7 +47,7 @@ export default function BudgetsScreen() {
       Alert.alert('Invalid amount', 'Enter a budget amount greater than 0.');
       return;
     }
-    await upsertBudget({ categoryId, amount: parsed, period });
+    await upsertBudget({ categoryId, amount: parsed, period: 'monthly' });
     setModalVisible(false);
   };
 
@@ -107,15 +103,13 @@ export default function BudgetsScreen() {
                       { text: 'Delete', style: 'destructive', onPress: () => removeBudget(budget.id) },
                     ])
                   }
-                  onPress={() => openEdit(budget.categoryId, budget.amount, budget.period)}
+                  onPress={() => openEdit(budget.categoryId, budget.amount)}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
                     <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>
                       {category?.name ?? 'Overall Budget'}
                     </Text>
-                    <Text style={{ fontSize: 12, color: colors.textLight, textTransform: 'capitalize' }}>
-                      {budget.period}
-                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.textLight }}>Monthly</Text>
                   </View>
                   <ProgressBar percent={usage.percentUsed} />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm }}>
@@ -199,30 +193,9 @@ export default function BudgetsScreen() {
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
                 paddingBottom: spacing.sm,
-                marginBottom: spacing.lg,
+                marginBottom: spacing.xl,
               }}
             />
-
-            <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>Period</Text>
-            <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl }}>
-              {(['monthly', 'weekly'] as BudgetPeriod[]).map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  onPress={() => setPeriod(p)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: spacing.sm + 2,
-                    borderRadius: radius.md,
-                    alignItems: 'center',
-                    backgroundColor: period === p ? colors.primary : colors.background,
-                  }}
-                >
-                  <Text style={{ color: period === p ? colors.white : colors.text, fontWeight: '600', textTransform: 'capitalize' }}>
-                    {p}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <Button label="Cancel" variant="secondary" style={{ flex: 1 }} onPress={() => setModalVisible(false)} />

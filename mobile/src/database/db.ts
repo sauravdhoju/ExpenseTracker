@@ -110,6 +110,17 @@ async function runMigrations(): Promise<void> {
       color TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS shortcuts (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL,
+      amount REAL NOT NULL,
+      category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+      account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -121,6 +132,7 @@ export async function resetDatabase(): Promise<void> {
     DROP TABLE IF EXISTS budgets;
     DROP TABLE IF EXISTS bills;
     DROP TABLE IF EXISTS goals;
+    DROP TABLE IF EXISTS shortcuts;
     DROP TABLE IF EXISTS categories;
     DROP TABLE IF EXISTS accounts;
     DROP TABLE IF EXISTS settings;

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,11 +21,13 @@ import PageHeader from '../../../src/components/ui/PageHeader';
 import IconCircle from '../../../src/components/ui/IconCircle';
 import EmptyState from '../../../src/components/ui/EmptyState';
 import BalanceSummary from '../../../src/components/dashboard/BalanceSummary';
-import BudgetOverview from '../../../src/components/dashboard/BudgetOverview';
+import BudgetSummaryCard from '../../../src/components/dashboard/BudgetSummaryCard';
 import GoalsPreview from '../../../src/components/dashboard/GoalsPreview';
 import UpcomingBillsPreview from '../../../src/components/dashboard/UpcomingBillsPreview';
 import InsightCard from '../../../src/components/dashboard/InsightCard';
 import TransactionListItem from '../../../src/components/transactions/TransactionListItem';
+import ShortcutConfirmSheet from '../../../src/components/ShortcutConfirmSheet';
+import type { Shortcut } from '../../../src/types';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -43,7 +45,10 @@ export default function DashboardScreen() {
   const transactions = useAppStore((s) => s.transactions);
   const categories = useAppStore((s) => s.categories);
   const budgets = useAppStore((s) => s.budgets);
+  const shortcuts = useAppStore((s) => s.shortcuts);
   const removeTransaction = useAppStore((s) => s.removeTransaction);
+
+  const [activeShortcut, setActiveShortcut] = useState<Shortcut | null>(null);
 
   const now = useMemo(() => new Date(), []);
   const monthTransactions = useMemo(() => filterByMonth(transactions, now), [transactions, now]);
@@ -67,8 +72,6 @@ export default function DashboardScreen() {
 
   const recentTransactions = transactions.slice(0, 5);
 
-  const frequentCategories = categories.filter((c) => c.kind === 'expense').slice(0, 4);
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -86,27 +89,61 @@ export default function DashboardScreen() {
       <BalanceSummary balance={balance} income={income} expenses={expenses} />
 
       {/* Quick add shortcuts */}
-      {frequentCategories.length > 0 && (
-        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
-          {frequentCategories.map((cat) => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: spacing.md, paddingRight: spacing.sm, marginBottom: spacing.lg }}
+      >
+        {shortcuts.map((shortcut) => {
+          const category = categories.find((c) => c.id === shortcut.categoryId);
+          const accentColor = shortcut.type === 'income' ? colors.income : colors.expense;
+          return (
             <TouchableOpacity
-              key={cat.id}
-              onPress={() =>
-                router.push({
-                  pathname: '/transaction/new',
-                  params: { type: 'expense', categoryId: cat.id },
-                })
-              }
-              style={{ flex: 1, alignItems: 'center' }}
+              key={shortcut.id}
+              onPress={() => setActiveShortcut(shortcut)}
+              onLongPress={() => router.push({ pathname: '/shortcuts/[id]', params: { id: shortcut.id } })}
+              style={{ alignItems: 'center', width: 60 }}
             >
-              <IconCircle name={cat.icon as any} color={cat.color} size={48} iconSize={20} />
-              <Text style={{ fontSize: 11, color: colors.textLight, marginTop: 4 }} numberOfLines={1}>
-                {cat.name.split(' ')[0]}
+              {category ? (
+                <IconCircle name={category.icon as any} color={category.color} size={48} iconSize={20} />
+              ) : (
+                <IconCircle name="pricetag-outline" color={accentColor} size={48} iconSize={20} />
+              )}
+              <Text
+                style={{ fontSize: 11, color: colors.textLight, marginTop: 4, textAlign: 'center' }}
+                numberOfLines={1}
+              >
+                {shortcut.label.split(' ')[0]}
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
-      )}
+          );
+        })}
+
+        <TouchableOpacity
+          onPress={() => router.push('/shortcuts/new')}
+          style={{ alignItems: 'center', width: 60 }}
+        >
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              borderWidth: 1.5,
+              borderColor: colors.border,
+              borderStyle: 'dashed',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="add" size={20} color={colors.textLight} />
+          </View>
+          <Text style={{ fontSize: 11, color: colors.textLight, marginTop: 4 }} numberOfLines={1}>
+            Add
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      <ShortcutConfirmSheet shortcut={activeShortcut} onClose={() => setActiveShortcut(null)} />
 
       {/* Spending overview */}
       <Card style={{ marginBottom: spacing.lg }}>
@@ -155,7 +192,7 @@ export default function DashboardScreen() {
         </Text>
       </Card>
 
-      <BudgetOverview monthTransactions={monthTransactions} />
+      <BudgetSummaryCard transactions={transactions} />
 
       {/* Recent transactions */}
       <Card style={{ marginBottom: spacing.lg }}>

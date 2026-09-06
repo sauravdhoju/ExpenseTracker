@@ -1,5 +1,5 @@
 import type { Account, Budget, Goal, Transaction } from '../types';
-import { daysBetween, monthKey, todayISO } from '../utils/date';
+import { daysBetween, isSameDay, isSameWeek, monthKey, todayISO } from '../utils/date';
 
 export function getTotalBalance(accounts: Account[]): number {
   return accounts.filter((a) => a.isActive).reduce((sum, a) => sum + a.balance, 0);
@@ -8,6 +8,14 @@ export function getTotalBalance(accounts: Account[]): number {
 export function filterByMonth(transactions: Transaction[], date: Date): Transaction[] {
   const key = monthKey(date);
   return transactions.filter((t) => t.date.slice(0, 7) === key);
+}
+
+export function filterByWeek(transactions: Transaction[], date: Date): Transaction[] {
+  return transactions.filter((t) => isSameWeek(t.date, date));
+}
+
+export function filterByDay(transactions: Transaction[], date: Date): Transaction[] {
+  return transactions.filter((t) => isSameDay(t.date, date));
 }
 
 export function getTotalIncome(transactions: Transaction[]): number {
@@ -169,4 +177,54 @@ export function getSpendingTrend(currentMonth: number, previousMonth: number): S
   if (change > 5) return 'up';
   if (change < -5) return 'down';
   return 'flat';
+}
+
+export interface BudgetEngineSummary {
+  monthlyBudget: number;
+  spentThisMonth: number;
+  remainingThisMonth: number;
+  daysRemainingInMonth: number;
+  dailyAllowance: number;
+  weeklyAllowance: number;
+  spentToday: number;
+  safeToSpendToday: number;
+  remainingToday: number;
+  spentThisWeek: number;
+}
+
+/**
+ * Monthly budget is the source of truth: daily/weekly allowances are always
+ * derived from the remaining monthly budget, never set independently.
+ */
+export function getBudgetEngineSummary(
+  monthlyBudget: number,
+  transactions: Transaction[],
+  now: Date
+): BudgetEngineSummary {
+  const monthTransactions = filterByMonth(transactions, now);
+  const spentThisMonth = getTotalExpenses(monthTransactions);
+  const remainingThisMonth = monthlyBudget - spentThisMonth;
+
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysRemainingInMonth = daysInMonth - now.getDate() + 1;
+
+  const dailyAllowance =
+    daysRemainingInMonth > 0 ? Math.max(remainingThisMonth, 0) / daysRemainingInMonth : 0;
+  const weeklyAllowance = dailyAllowance * 7;
+
+  const spentToday = getTotalExpenses(filterByDay(transactions, now));
+  const spentThisWeek = getTotalExpenses(filterByWeek(transactions, now));
+
+  return {
+    monthlyBudget,
+    spentThisMonth,
+    remainingThisMonth,
+    daysRemainingInMonth,
+    dailyAllowance,
+    weeklyAllowance,
+    spentToday,
+    safeToSpendToday: dailyAllowance,
+    remainingToday: dailyAllowance - spentToday,
+    spentThisWeek,
+  };
 }

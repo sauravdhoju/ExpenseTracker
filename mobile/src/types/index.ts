@@ -71,13 +71,24 @@ export interface RecurringTransaction {
   createdAt: string;
 }
 
-export type BudgetPeriod = 'weekly' | 'monthly';
+export type BudgetPeriod = 'monthly';
 
 export interface Budget {
   id: string;
   categoryId: string | null; // null = overall budget
   amount: number;
   period: BudgetPeriod;
+  createdAt: string;
+}
+
+export interface Shortcut {
+  id: string;
+  label: string;
+  type: 'expense' | 'income';
+  amount: number;
+  categoryId: string | null;
+  accountId: string;
+  sortOrder: number;
   createdAt: string;
 }
 
