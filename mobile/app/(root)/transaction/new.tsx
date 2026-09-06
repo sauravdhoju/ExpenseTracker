@@ -1,7 +1,17 @@
-import { useState } from 'react';
-import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { spacing, radius } from '../../../src/constants/theme';
@@ -9,13 +19,16 @@ import { todayISO } from '../../../src/utils/date';
 import { CURRENCIES } from '../../../src/constants/currencies';
 import Button from '../../../src/components/ui/Button';
 import DateField from '../../../src/components/ui/DateField';
+
 import type { RecurringFrequency, TransactionType } from '../../../src/types';
 
 const FREQUENCIES: RecurringFrequency[] = ['daily', 'weekly', 'monthly', 'yearly'];
+const TRANSACTION_TYPES: TransactionType[] = ['expense', 'income', 'transfer'];
 
 export default function NewTransactionScreen() {
   const colors = useThemeColors();
   const router = useRouter();
+
   const params = useLocalSearchParams<{ type?: string; categoryId?: string }>();
   const initialType = (params.type as TransactionType) ?? 'expense';
 
@@ -37,13 +50,22 @@ export default function NewTransactionScreen() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
   const [isSaving, setIsSaving] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
 
-  const relevantCategories = categories.filter((c) => c.kind === (type === 'income' ? 'income' : 'expense'));
+  const relevantCategories = useMemo(
+    () => categories.filter((c) => c.kind === (type === 'income' ? 'income' : 'expense')),
+    [categories, type]
+  );
+
+  const accentColor =
+    type === 'income' ? colors.income : type === 'expense' ? colors.expense : colors.primary;
 
   const canSave =
     parseFloat(amount) > 0 &&
-    accountId &&
-    (type === 'transfer' ? toAccountId && toAccountId !== accountId : categoryId && title.trim().length > 0);
+    !!accountId &&
+    (type === 'transfer'
+      ? !!toAccountId && toAccountId !== accountId
+      : !!categoryId && title.trim().length > 0);
 
   const handleSave = async () => {
     const parsedAmount = parseFloat(amount);
@@ -61,7 +83,6 @@ export default function NewTransactionScreen() {
       if (type === 'transfer') {
         if (!toAccountId || toAccountId === accountId) {
           Alert.alert('Invalid transfer', 'Choose two different accounts.');
-          setIsSaving(false);
           return;
         }
         await addTransaction({
@@ -76,12 +97,10 @@ export default function NewTransactionScreen() {
       } else {
         if (!categoryId) {
           Alert.alert('Missing category', 'Select a category.');
-          setIsSaving(false);
           return;
         }
         if (!title.trim()) {
           Alert.alert('Missing title', 'Enter a title.');
-          setIsSaving(false);
           return;
         }
 
@@ -113,267 +132,414 @@ export default function NewTransactionScreen() {
     }
   };
 
+  const selectedCategory = relevantCategories.find((c) => c.id === categoryId);
+
+  const sectionLabelStyle = {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: colors.textLight,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  };
+
+  const chip = (
+    key: string,
+    active: boolean,
+    onPress: () => void,
+    icon: keyof typeof Ionicons.glyphMap,
+    label: string,
+    activeColor: string = colors.primary
+  ) => (
+    <TouchableOpacity
+      key={key}
+      onPress={onPress}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 7,
+        paddingHorizontal: 12,
+        borderRadius: radius.full,
+        backgroundColor: active ? activeColor : colors.background,
+        borderWidth: active ? 0 : 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Ionicons name={icon} size={13} color={active ? '#FFF' : activeColor} />
+      <Text
+        numberOfLines={1}
+        style={{ fontSize: 12.5, fontWeight: '600', color: active ? '#FFF' : colors.text }}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* Header */}
       <View
         style={{
           flexDirection: 'row',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          padding: spacing.lg,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
+          justifyContent: 'space-between',
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.md,
+          paddingBottom: spacing.sm,
         }}
       >
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={24} color={colors.text} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 19,
+            backgroundColor: colors.card,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name="close" size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text style={{ fontSize: 17, fontWeight: '600', color: colors.text }}>
-          Add {type === 'transfer' ? 'Transfer' : type === 'income' ? 'Income' : 'Expense'}
-        </Text>
-        <TouchableOpacity onPress={handleSave} disabled={!canSave || isSaving}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: colors.primary, opacity: canSave && !isSaving ? 1 : 0.4 }}>
+
+        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>New Transaction</Text>
+
+        <TouchableOpacity onPress={handleSave} disabled={!canSave || isSaving} hitSlop={10}>
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: '700',
+              color: colors.primary,
+              opacity: canSave && !isSaving ? 1 : 0.35,
+            }}
+          >
             Save
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}
+      >
         {/* Type selector */}
-        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl }}>
-          {(['expense', 'income', 'transfer'] as TransactionType[]).map((t) => (
-            <TouchableOpacity
-              key={t}
-              onPress={() => setType(t)}
-              style={{
-                flex: 1,
-                paddingVertical: spacing.sm + 2,
-                borderRadius: radius.full,
-                alignItems: 'center',
-                backgroundColor: type === t ? colors.primary : colors.card,
-              }}
-            >
-              <Text style={{ color: type === t ? colors.white : colors.text, fontWeight: '600', fontSize: 13, textTransform: 'capitalize' }}>
-                {t}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Amount */}
         <View
           style={{
             flexDirection: 'row',
-            alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-            paddingBottom: spacing.md,
-            marginBottom: spacing.xl,
+            backgroundColor: colors.card,
+            borderRadius: radius.lg,
+            padding: 4,
+            marginBottom: spacing.md,
           }}
         >
-          <Text style={{ fontSize: 28, fontWeight: '700', color: colors.text, marginRight: spacing.sm }}>{currencySymbol}</Text>
+          {TRANSACTION_TYPES.map((item) => {
+            const active = type === item;
+            const itemColor =
+              item === 'income' ? colors.income : item === 'expense' ? colors.expense : colors.primary;
+
+            return (
+              <TouchableOpacity
+                key={item}
+                onPress={() => {
+                  setType(item);
+                  if (item === 'transfer') setCategoryId(null);
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  borderRadius: radius.md,
+                  alignItems: 'center',
+                  backgroundColor: active ? itemColor : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '700',
+                    textTransform: 'capitalize',
+                    color: active ? colors.white : colors.textLight,
+                  }}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Amount + Title card */}
+        <View
+          style={{
+            backgroundColor: colors.card,
+            borderRadius: radius.xl,
+            paddingVertical: spacing.lg,
+            paddingHorizontal: spacing.lg,
+            marginBottom: spacing.md,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 26, fontWeight: '700', color: accentColor, marginRight: 4 }}>
+              {currencySymbol}
+            </Text>
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              placeholderTextColor={colors.textLight}
+              keyboardType="decimal-pad"
+              autoFocus
+              style={{
+                minWidth: 120,
+                fontSize: 38,
+                fontWeight: '800',
+                color: colors.text,
+                textAlign: 'center',
+                padding: 0,
+              }}
+            />
+          </View>
+
+          <View
+            style={{
+              height: 1,
+              backgroundColor: colors.border,
+              marginVertical: spacing.md,
+            }}
+          />
+
           <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="0.00"
+            value={title}
+            onChangeText={setTitle}
+            placeholder={type === 'transfer' ? 'Transfer note (optional)' : 'What was this for?'}
             placeholderTextColor={colors.textLight}
-            keyboardType="decimal-pad"
-            style={{ flex: 1, fontSize: 32, fontWeight: '700', color: colors.text }}
-            autoFocus
+            style={{ fontSize: 15, fontWeight: '500', color: colors.text, padding: 0 }}
           />
         </View>
 
-        {/* Title */}
-        <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>
-          {type === 'transfer' ? 'Note' : 'Title / Merchant'}
-        </Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder={type === 'transfer' ? 'e.g. Move to savings' : 'e.g. Lunch at cafe'}
-          placeholderTextColor={colors.textLight}
+        {/* Details card */}
+        <View
           style={{
             backgroundColor: colors.card,
-            borderRadius: radius.md,
-            padding: spacing.md,
-            fontSize: 15,
-            color: colors.text,
-            marginBottom: spacing.lg,
+            borderRadius: radius.xl,
+            paddingHorizontal: spacing.lg,
+            marginBottom: spacing.md,
           }}
-        />
-
-        {/* Accounts */}
-        {type === 'transfer' ? (
-          <>
-            <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>From Account</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }}>
-              {accounts.map((acc) => (
-                <TouchableOpacity
-                  key={acc.id}
-                  onPress={() => setAccountId(acc.id)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: radius.full,
-                    backgroundColor: accountId === acc.id ? colors.primary : colors.card,
-                    marginRight: spacing.sm,
-                  }}
-                >
-                  <Text style={{ color: accountId === acc.id ? colors.white : colors.text, fontWeight: '600', fontSize: 13 }}>
-                    {acc.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>To Account</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }}>
-              {accounts
-                .filter((a) => a.id !== accountId)
-                .map((acc) => (
-                  <TouchableOpacity
-                    key={acc.id}
-                    onPress={() => setToAccountId(acc.id)}
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 14,
-                      borderRadius: radius.full,
-                      backgroundColor: toAccountId === acc.id ? colors.primary : colors.card,
-                      marginRight: spacing.sm,
-                    }}
-                  >
-                    <Text style={{ color: toAccountId === acc.id ? colors.white : colors.text, fontWeight: '600', fontSize: 13 }}>
-                      {acc.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-            </ScrollView>
-          </>
-        ) : (
-          <>
-            <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>Category</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg }}>
-              {relevantCategories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setCategoryId(cat.id)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: radius.full,
-                    backgroundColor: categoryId === cat.id ? cat.color : colors.card,
-                  }}
-                >
-                  <Ionicons name={cat.icon as any} size={14} color={categoryId === cat.id ? '#FFF' : cat.color} />
-                  <Text style={{ color: categoryId === cat.id ? '#FFF' : colors.text, fontWeight: '500', fontSize: 12.5 }}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+        >
+          {type !== 'transfer' && (
+            <View
+              style={{
+                paddingVertical: spacing.md,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: spacing.sm,
+                }}
+              >
+                <Text style={sectionLabelStyle}>Category</Text>
+                {selectedCategory && (
+                  <Text style={{ fontSize: 11, color: colors.textLight }}>{selectedCategory.name}</Text>
+                )}
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {relevantCategories.map((cat) =>
+                  chip(
+                    cat.id,
+                    categoryId === cat.id,
+                    () => setCategoryId(cat.id),
+                    cat.icon as keyof typeof Ionicons.glyphMap,
+                    cat.name,
+                    cat.color
+                  )
+                )}
+              </ScrollView>
             </View>
+          )}
 
-            <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>Account</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }}>
-              {accounts.map((acc) => (
-                <TouchableOpacity
-                  key={acc.id}
-                  onPress={() => setAccountId(acc.id)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: radius.full,
-                    backgroundColor: accountId === acc.id ? colors.primary : colors.card,
-                    marginRight: spacing.sm,
-                  }}
-                >
-                  <Text style={{ color: accountId === acc.id ? colors.white : colors.text, fontWeight: '600', fontSize: 13 }}>
-                    {acc.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          <View
+            style={{
+              paddingVertical: spacing.md,
+              borderBottomWidth: type === 'transfer' ? 1 : 0,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <Text style={[sectionLabelStyle, { marginBottom: spacing.sm }]}>
+              {type === 'transfer' ? 'From account' : 'Account'}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {accounts.map((account) =>
+                chip(
+                  account.id,
+                  account.id === accountId,
+                  () => setAccountId(account.id),
+                  'wallet-outline',
+                  account.name
+                )
+              )}
             </ScrollView>
-          </>
-        )}
+          </View>
 
-        {/* Date */}
-        <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>Date</Text>
-        <View style={{ marginBottom: spacing.lg }}>
-          <DateField value={date} onChange={setDate} />
+          {type === 'transfer' && (
+            <View
+              style={{
+                paddingVertical: spacing.md,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Text style={[sectionLabelStyle, { marginBottom: spacing.sm }]}>To account</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {accounts
+                  .filter((a) => a.id !== accountId)
+                  .map((account) =>
+                    chip(
+                      account.id,
+                      account.id === toAccountId,
+                      () => setToAccountId(account.id),
+                      'arrow-down-outline',
+                      account.name
+                    )
+                  )}
+              </ScrollView>
+            </View>
+          )}
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: spacing.md,
+            }}
+          >
+            <Text style={sectionLabelStyle}>Date</Text>
+            <DateField value={date} onChange={setDate} />
+          </View>
         </View>
 
-        {/* Notes (expense/income only, transfer uses title as note) */}
+        {/* Notes + Recurring (collapsed by default to avoid empty space) */}
         {type !== 'transfer' && (
-          <>
-            <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: spacing.sm }}>Notes</Text>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Optional notes"
-              placeholderTextColor={colors.textLight}
-              multiline
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: radius.xl,
+              paddingHorizontal: spacing.lg,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => setNotesOpen((v) => !v)}
               style={{
-                backgroundColor: colors.card,
-                borderRadius: radius.md,
-                padding: spacing.md,
-                fontSize: 14,
-                color: colors.text,
-                marginBottom: spacing.lg,
-                minHeight: 60,
-                textAlignVertical: 'top',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: spacing.md,
+                borderBottomWidth: notesOpen ? 1 : 0,
+                borderBottomColor: colors.border,
               }}
-            />
+            >
+              <Text style={sectionLabelStyle}>Notes</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {!notesOpen && notes.trim().length > 0 && (
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textLight, maxWidth: 140 }}>
+                    {notes.trim()}
+                  </Text>
+                )}
+                <Ionicons
+                  name={notesOpen ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.textLight}
+                />
+              </View>
+            </TouchableOpacity>
 
-            {/* Recurring */}
+            {notesOpen && (
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Add a note..."
+                placeholderTextColor={colors.textLight}
+                multiline
+                textAlignVertical="top"
+                style={{
+                  minHeight: 60,
+                  fontSize: 14,
+                  color: colors.text,
+                  paddingVertical: spacing.md,
+                }}
+              />
+            )}
+
             <TouchableOpacity
               onPress={() => setIsRecurring((v) => !v)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                backgroundColor: colors.card,
-                borderRadius: radius.md,
-                padding: spacing.md,
-                marginBottom: isRecurring ? spacing.md : spacing.lg,
+                paddingVertical: spacing.md,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                <Ionicons name="repeat" size={18} color={colors.primary} />
-                <Text style={{ fontSize: 14, color: colors.text }}>Make this recurring</Text>
+                <Ionicons name="repeat" size={16} color={colors.primary} />
+                <Text style={{ fontSize: 13.5, fontWeight: '600', color: colors.text }}>Repeat</Text>
               </View>
               <Ionicons
-                name={isRecurring ? 'checkbox' : 'square-outline'}
-                size={20}
+                name={isRecurring ? 'checkmark-circle' : 'ellipse-outline'}
+                size={22}
                 color={isRecurring ? colors.primary : colors.textLight}
               />
             </TouchableOpacity>
 
             {isRecurring && (
-              <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg, flexWrap: 'wrap' }}>
-                {FREQUENCIES.map((f) => (
-                  <TouchableOpacity
-                    key={f}
-                    onPress={() => setFrequency(f)}
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 14,
-                      borderRadius: radius.full,
-                      backgroundColor: frequency === f ? colors.primary : colors.card,
-                    }}
-                  >
-                    <Text style={{ color: frequency === f ? colors.white : colors.text, fontWeight: '600', fontSize: 12.5, textTransform: 'capitalize' }}>
-                      {f}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  paddingBottom: spacing.md,
+                }}
+              >
+                {FREQUENCIES.map((f) =>
+                  chip(f, frequency === f, () => setFrequency(f), 'time-outline', f)
+                )}
               </View>
             )}
-          </>
+          </View>
         )}
-
-        <Button label="Save" onPress={handleSave} disabled={!canSave} loading={isSaving} />
       </ScrollView>
-    </View>
+
+      <View
+        style={{
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.sm,
+          paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
+          backgroundColor: colors.background,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+        }}
+      >
+        <Button
+          label={isRecurring ? 'Create Recurring Transaction' : 'Save Transaction'}
+          onPress={handleSave}
+          disabled={!canSave}
+          loading={isSaving}
+        />
+      </View>
+    </KeyboardAvoidingView>
   );
 }
