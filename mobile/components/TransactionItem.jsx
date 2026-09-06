@@ -2,11 +2,12 @@ import { Alert, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../assets/styles/home.styles';
 import { COLORS } from '../constants/colors';
-import { getCategoryIcon } from '../constants/categories';
+import { getCategoryColor, getCategoryIcon } from '../constants/categories';
 
 const TransactionItem = ({ item, onDelete }) => {
   const isExpense = parseFloat(item.amount) < 0;
   const sign = isExpense ? '-' : '+';
+  const categoryColor = getCategoryColor(item.category);
 
   const handleDelete = () => {
     Alert.alert(
@@ -26,11 +27,16 @@ const TransactionItem = ({ item, onDelete }) => {
   return (
     <View style={styles.transactionCard}>
       <View style={styles.transactionContent}>
-        <View style={styles.categoryIconContainer}>
+        <View
+          style={[
+            styles.categoryIconContainer,
+            { backgroundColor: categoryColor + '22' },
+          ]}
+        >
           <Ionicons
             name={getCategoryIcon(item.category)}
             size={20}
-            color={isExpense ? COLORS.expense : COLORS.income}
+            color={categoryColor}
           />
         </View>
         <View style={styles.transactionLeft}>

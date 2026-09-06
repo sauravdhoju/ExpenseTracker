@@ -2,23 +2,25 @@ import { useEffect } from 'react';
 import { FlatList, Image, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTransactions } from '../../hooks/useTransaction.js';
-import PageLoader from '../../components/PageLoader.jsx';
-import BalanceCard from '../../components/BalanceCard.jsx';
-import TransactionItem from '../../components/TransactionItem.jsx';
-import { styles } from '../../assets/styles/home.styles.js';
-import { COLORS } from '../../constants/colors.js';
+import { useTransactions } from '../../../hooks/useTransaction.js';
+import PageLoader from '../../../components/PageLoader.jsx';
+import BalanceCard from '../../../components/BalanceCard.jsx';
+import TransactionItem from '../../../components/TransactionItem.jsx';
+import { styles } from '../../../assets/styles/home.styles.js';
+import { COLORS } from '../../../constants/colors.js';
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function Page() {
   const router = useRouter();
 
-  const {
-    transactions,
-    summary,
-    isLoading,
-    loadData,
-    deleteTransaction,
-  } = useTransactions();
+  const { transactions, summary, isLoading, loadData, deleteTransaction } =
+    useTransactions();
 
   useEffect(() => {
     loadData();
@@ -34,13 +36,13 @@ export default function Page() {
           {/* Left  */}
           <View style={styles.headerLeft}>
             <Image
-              source={require('../../assets/images/logo.png')}
+              source={require('../../../assets/images/logo.png')}
               style={styles.headerLogo}
               resizeMode="contain"
             />
             <View style={styles.welcomeContainer}>
-              <Text style={styles.welcomeText}>Welcome,</Text>
-              <Text style={styles.usernameText}>Guest</Text>
+              <Text style={styles.welcomeText}>{getGreeting()},</Text>
+              <Text style={styles.usernameText}>Your Wallet</Text>
             </View>
           </View>
 
@@ -58,7 +60,9 @@ export default function Page() {
         <BalanceCard summary={summary} />
       </View>
 
-      <View style={[styles.transactionsHeaderContainer, { marginHorizontal: 20 }]}>
+      <View
+        style={[styles.transactionsHeaderContainer, { marginHorizontal: 20 }]}
+      >
         <Text style={styles.sectionTitle}>Recent Transactions</Text>
       </View>
 
