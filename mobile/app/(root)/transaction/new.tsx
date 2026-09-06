@@ -6,6 +6,7 @@ import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { spacing, radius } from '../../../src/constants/theme';
 import { todayISO } from '../../../src/utils/date';
+import { CURRENCIES } from '../../../src/constants/currencies';
 import Button from '../../../src/components/ui/Button';
 import DateField from '../../../src/components/ui/DateField';
 import type { RecurringFrequency, TransactionType } from '../../../src/types';
@@ -22,6 +23,8 @@ export default function NewTransactionScreen() {
   const categories = useAppStore((s) => s.categories);
   const addTransaction = useAppStore((s) => s.addTransaction);
   const addRecurring = useAppStore((s) => s.addRecurring);
+  const currency = useAppStore((s) => s.settings.currency);
+  const currencySymbol = CURRENCIES[currency].symbol;
 
   const [type, setType] = useState<TransactionType>(initialType);
   const [amount, setAmount] = useState('');
@@ -168,7 +171,7 @@ export default function NewTransactionScreen() {
             marginBottom: spacing.xl,
           }}
         >
-          <Text style={{ fontSize: 28, fontWeight: '700', color: colors.text, marginRight: spacing.sm }}>$</Text>
+          <Text style={{ fontSize: 28, fontWeight: '700', color: colors.text, marginRight: spacing.sm }}>{currencySymbol}</Text>
           <TextInput
             value={amount}
             onChangeText={setAmount}

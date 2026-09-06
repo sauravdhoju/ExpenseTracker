@@ -8,6 +8,7 @@ import { spacing, radius } from '../../../src/constants/theme';
 import Button from '../../../src/components/ui/Button';
 import DateField from '../../../src/components/ui/DateField';
 import PageLoader from '../../../src/components/ui/PageLoader';
+import { CURRENCIES } from '../../../src/constants/currencies';
 import type { TransactionType } from '../../../src/types';
 
 export default function EditTransactionScreen() {
@@ -20,6 +21,8 @@ export default function EditTransactionScreen() {
   const categories = useAppStore((s) => s.categories);
   const editTransaction = useAppStore((s) => s.editTransaction);
   const removeTransaction = useAppStore((s) => s.removeTransaction);
+  const currency = useAppStore((s) => s.settings.currency);
+  const currencySymbol = CURRENCIES[currency].symbol;
 
   const existing = transactions.find((t) => t.id === id);
 
@@ -109,7 +112,7 @@ export default function EditTransactionScreen() {
             marginBottom: spacing.xl,
           }}
         >
-          <Text style={{ fontSize: 28, fontWeight: '700', color: colors.text, marginRight: spacing.sm }}>$</Text>
+          <Text style={{ fontSize: 28, fontWeight: '700', color: colors.text, marginRight: spacing.sm }}>{currencySymbol}</Text>
           <TextInput
             value={amount}
             onChangeText={setAmount}
