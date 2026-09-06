@@ -181,7 +181,7 @@ export default function TransactionsScreen() {
             )
           }
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 130 }}
         />
       )}
     </View>

@@ -69,7 +69,10 @@ export default function DashboardScreen() {
   const frequentCategories = categories.filter((c) => c.kind === 'expense').slice(0, 4);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ padding: spacing.lg, paddingBottom: 130 }}
+    >
       {/* Header */}
       <View
         style={{
@@ -91,7 +94,7 @@ export default function DashboardScreen() {
           <TouchableOpacity onPress={() => router.push('/bills')} hitSlop={8}>
             <Ionicons name="notifications-outline" size={22} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/(root)/(tabs)/more')} hitSlop={8}>
+          <TouchableOpacity onPress={() => router.push('/more')} hitSlop={8}>
             <Ionicons name="settings-outline" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
@@ -124,19 +127,48 @@ export default function DashboardScreen() {
 
       {/* Spending overview */}
       <Card style={{ marginBottom: spacing.lg }}>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.sm }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>
           Spending Overview
         </Text>
-        <Text style={{ fontSize: 14, color: colors.text, marginBottom: 4 }}>
-          This month you spent {format(expenses)}
-        </Text>
-        <Text style={{ fontSize: 13, color: comparison.percentChange <= 0 ? colors.income : colors.expense }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+          <View>
+            <Text style={{ fontSize: 12.5, color: colors.textLight, marginBottom: 2 }}>This month</Text>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>{format(expenses)}</Text>
+          </View>
+          {comparison.percentChange !== 0 && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingVertical: 4,
+                paddingHorizontal: 10,
+                borderRadius: 999,
+                backgroundColor: (comparison.percentChange < 0 ? colors.income : colors.expense) + '1A',
+              }}
+            >
+              <Ionicons
+                name={comparison.percentChange < 0 ? 'arrow-down' : 'arrow-up'}
+                size={12}
+                color={comparison.percentChange < 0 ? colors.income : colors.expense}
+              />
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: '700',
+                  color: comparison.percentChange < 0 ? colors.income : colors.expense,
+                }}
+              >
+                {Math.abs(comparison.percentChange).toFixed(0)}%
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: spacing.sm }}>
           {comparison.percentChange === 0
             ? 'Same as last month'
             : `${Math.abs(comparison.percentChange).toFixed(0)}% ${comparison.percentChange < 0 ? 'less' : 'more'} than last month`}
-        </Text>
-        <Text style={{ fontSize: 13, color: colors.textLight, marginTop: 4 }}>
-          Daily average: {format(dailyAverage)}
+          {'  ·  '}Daily average {format(dailyAverage)}
         </Text>
       </Card>
 

@@ -27,15 +27,41 @@ function mapRow(row: CategoryRow): Category {
   };
 }
 
+/** Removes duplicate categories (same name+kind) left over by earlier double-seeding, keeping one row and re-pointing any references to it. */
+export async function dedupeCategories(): Promise<void> {
+  const db = await getDb();
+  const groups = await db.getAllAsync<{ keepId: string; name: string; kind: CategoryKind }>(
+    'SELECT MIN(id) as keepId, name, kind FROM categories GROUP BY name, kind HAVING COUNT(*) > 1'
+  );
+  for (const group of groups) {
+    const duplicates = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM categories WHERE name = ? AND kind = ? AND id != ?',
+      group.name,
+      group.kind,
+      group.keepId
+    );
+    for (const dup of duplicates) {
+      await db.runAsync('UPDATE transactions SET category_id = ? WHERE category_id = ?', group.keepId, dup.id);
+      await db.runAsync('UPDATE budgets SET category_id = ? WHERE category_id = ?', group.keepId, dup.id);
+      await db.runAsync('UPDATE recurring_transactions SET category_id = ? WHERE category_id = ?', group.keepId, dup.id);
+      await db.runAsync('DELETE FROM categories WHERE id = ?', dup.id);
+    }
+  }
+}
+
 export async function seedDefaultCategories(): Promise<void> {
   const db = await getDb();
-  const existing = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM categories'
-  );
-  if (existing && existing.count > 0) return;
+  await dedupeCategories();
 
   const now = new Date().toISOString();
   for (const cat of DEFAULT_CATEGORIES) {
+    const existing = await db.getFirstAsync<{ id: string }>(
+      'SELECT id FROM categories WHERE name = ? AND kind = ?',
+      cat.name,
+      cat.kind
+    );
+    if (existing) continue;
+
     await db.runAsync(
       `INSERT INTO categories (id, name, kind, icon, color, is_default, is_enabled, created_at)
        VALUES (?, ?, ?, ?, ?, 1, 1, ?)`,

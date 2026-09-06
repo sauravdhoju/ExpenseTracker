@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useAppStore } from '../../../src/store/useAppStore';
+import { isNotificationsSupported } from '../../../src/services/notificationService';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 
@@ -12,6 +13,7 @@ export default function NotificationsScreen() {
   const notificationsEnabled = useAppStore((s) => s.settings.notificationsEnabled);
   const hideBalances = useAppStore((s) => s.settings.hideBalances);
   const updateSettings = useAppStore((s) => s.updateSettings);
+  const notificationsSupported = isNotificationsSupported();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -23,11 +25,26 @@ export default function NotificationsScreen() {
         <View style={{ width: 22 }} />
       </View>
 
+      {!notificationsSupported && (
+        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
+          <Text style={{ fontSize: 12.5, color: colors.warning, lineHeight: 18 }}>
+            Notifications require a development build — they&apos;re disabled while running in Expo Go.
+          </Text>
+        </View>
+      )}
       <View style={{ padding: spacing.lg, paddingTop: 0 }}>
         <Card style={{ padding: 0 }}>
           <TouchableOpacity
             onPress={() => updateSettings({ notificationsEnabled: !notificationsEnabled })}
-            style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border }}
+            disabled={!notificationsSupported}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: spacing.lg,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              opacity: notificationsSupported ? 1 : 0.5,
+            }}
           >
             <Ionicons name="notifications-outline" size={19} color={colors.text} style={{ width: 26 }} />
             <View style={{ flex: 1, marginLeft: spacing.sm }}>
@@ -37,9 +54,9 @@ export default function NotificationsScreen() {
               </Text>
             </View>
             <Ionicons
-              name={notificationsEnabled ? 'toggle' : 'toggle-outline'}
+              name={notificationsEnabled && notificationsSupported ? 'toggle' : 'toggle-outline'}
               size={30}
-              color={notificationsEnabled ? colors.primary : colors.textLight}
+              color={notificationsEnabled && notificationsSupported ? colors.primary : colors.textLight}
             />
           </TouchableOpacity>
 

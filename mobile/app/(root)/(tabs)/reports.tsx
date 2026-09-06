@@ -80,7 +80,7 @@ export default function ReportsScreen() {
   );
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 130 }}>
       <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.lg }}>Reports</Text>
 
       {/* Net worth */}

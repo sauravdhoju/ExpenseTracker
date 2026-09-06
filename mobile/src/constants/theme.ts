@@ -1,5 +1,6 @@
 export interface ThemeColors {
   primary: string;
+  primaryDeep: string;
   background: string;
   surface: string;
   card: string;
@@ -14,32 +15,34 @@ export interface ThemeColors {
 }
 
 export const lightColors: ThemeColors = {
-  primary: '#2E7D32',
-  background: '#F4F7F5',
+  primary: '#0EA5E9',
+  primaryDeep: '#0369A1',
+  background: '#F1F7FB',
   surface: '#FFFFFF',
   card: '#FFFFFF',
-  text: '#1B2420',
-  textLight: '#6B7A72',
-  border: '#E3EAE5',
+  text: '#0F2A3D',
+  textLight: '#6A8299',
+  border: '#DCEAF3',
   white: '#FFFFFF',
-  income: '#2E9E5B',
-  expense: '#D64545',
-  warning: '#E0A62B',
-  shadow: '#000000',
+  income: '#16A34A',
+  expense: '#E1462F',
+  warning: '#D97706',
+  shadow: '#0B2436',
 };
 
 export const darkColors: ThemeColors = {
-  primary: '#4CAF50',
-  background: '#0F1512',
-  surface: '#1A211D',
-  card: '#1A211D',
-  text: '#EDF2EF',
-  textLight: '#8FA098',
-  border: '#293530',
+  primary: '#38BDF8',
+  primaryDeep: '#0EA5E9',
+  background: '#0A1622',
+  surface: '#122334',
+  card: '#122334',
+  text: '#E8F2FA',
+  textLight: '#7E96AC',
+  border: '#1E3548',
   white: '#FFFFFF',
-  income: '#4CD07A',
-  expense: '#F0685F',
-  warning: '#F2BB4D',
+  income: '#4ADE80',
+  expense: '#F87171',
+  warning: '#FBBF24',
   shadow: '#000000',
 };
 

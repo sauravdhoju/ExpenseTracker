@@ -3,7 +3,7 @@ import type { AppSettings } from '../types';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   currency: 'NPR',
-  themeMode: 'system',
+  themeMode: 'light',
   onboardingComplete: false,
   notificationsEnabled: true,
   hideBalances: false,

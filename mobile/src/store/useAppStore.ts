@@ -66,6 +66,8 @@ interface AppState {
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>;
 }
 
+let bootstrapPromise: Promise<void> | null = null;
+
 export const useAppStore = create<AppState>((set, get) => ({
   isReady: false,
   accounts: [],
@@ -78,11 +80,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   settings: settingsRepo.DEFAULT_SETTINGS,
 
   bootstrap: async () => {
-    await initDatabase();
-    await categoryRepo.seedDefaultCategories();
-    await processDueRecurringTransactions();
-    await get().refreshAll();
-    set({ isReady: true });
+    if (bootstrapPromise) return bootstrapPromise;
+    bootstrapPromise = (async () => {
+      await initDatabase();
+      await categoryRepo.seedDefaultCategories();
+      await processDueRecurringTransactions();
+      await get().refreshAll();
+      set({ isReady: true });
+    })();
+    return bootstrapPromise;
   },
 
   refreshAll: async () => {

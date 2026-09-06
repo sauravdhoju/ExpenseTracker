@@ -78,7 +78,7 @@ export default function BudgetsScreen() {
           />
         </Card>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
           {budgets.map((budget) => {
             const category = categories.find((c) => c.id === budget.categoryId);
             const usage = getBudgetUsage(budget, monthTransactions);

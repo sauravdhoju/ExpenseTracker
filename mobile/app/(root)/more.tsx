@@ -1,9 +1,9 @@
 import { ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useThemeColors } from '../../../src/hooks/useThemeColors';
-import { spacing } from '../../../src/constants/theme';
-import Card from '../../../src/components/ui/Card';
+import { useThemeColors } from '../../src/hooks/useThemeColors';
+import { spacing } from '../../src/constants/theme';
+import Card from '../../src/components/ui/Card';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
@@ -48,7 +48,7 @@ export default function MoreScreen() {
   const router = useRouter();
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 130 }}>
       <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.lg }}>More</Text>
 
       <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textLight, marginBottom: spacing.sm, textTransform: 'uppercase' }}>

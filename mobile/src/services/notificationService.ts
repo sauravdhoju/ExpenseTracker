@@ -1,16 +1,34 @@
-import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+/**
+ * expo-notifications runs push-token auto-registration as a side effect
+ * the instant it's imported, which throws in Expo Go on SDK 53+ (remote
+ * push was removed there). We only need local notifications, so the
+ * module is imported lazily and skipped entirely inside Expo Go.
+ */
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let handlerConfigured = false;
+
+async function getNotifications() {
+  const Notifications = await import('expo-notifications');
+  if (!handlerConfigured) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+    handlerConfigured = true;
+  }
+  return Notifications;
+}
 
 export async function requestNotificationPermission(): Promise<boolean> {
+  if (isExpoGo) return false;
+  const Notifications = await getNotifications();
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === 'granted') return true;
   const { status } = await Notifications.requestPermissionsAsync();
@@ -23,6 +41,7 @@ export async function scheduleBillReminder(
   amount: string,
   dueDate: Date
 ): Promise<string | null> {
+  if (isExpoGo) return null;
   const granted = await requestNotificationPermission();
   if (!granted) return null;
 
@@ -30,6 +49,7 @@ export async function scheduleBillReminder(
   trigger.setHours(9, 0, 0, 0);
   if (trigger.getTime() <= Date.now()) return null;
 
+  const Notifications = await getNotifications();
   return Notifications.scheduleNotificationAsync({
     identifier: `bill-${billId}`,
     content: {
@@ -44,8 +64,10 @@ export async function scheduleBillReminder(
 }
 
 export async function sendBudgetWarning(categoryName: string, percentUsed: number): Promise<void> {
+  if (isExpoGo) return;
   const granted = await requestNotificationPermission();
   if (!granted) return;
+  const Notifications = await getNotifications();
   await Notifications.scheduleNotificationAsync({
     content: {
       title: 'Budget warning',
@@ -56,13 +78,17 @@ export async function sendBudgetWarning(categoryName: string, percentUsed: numbe
 }
 
 export async function cancelNotification(identifier: string): Promise<void> {
+  if (isExpoGo) return;
+  const Notifications = await getNotifications();
   await Notifications.cancelScheduledNotificationAsync(identifier);
 }
 
 export async function cancelAllNotifications(): Promise<void> {
+  if (isExpoGo) return;
+  const Notifications = await getNotifications();
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
 export function isNotificationsSupported(): boolean {
-  return Platform.OS === 'android' || Platform.OS === 'ios';
+  return !isExpoGo;
 }
