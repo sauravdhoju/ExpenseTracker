@@ -7,6 +7,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingComplete: false,
   notificationsEnabled: true,
   hideBalances: false,
+  cloudBackupEnabled: false,
+  cloudBackupIntervalDays: 30,
+  lastCloudBackupAt: null,
 };
 
 export async function getSetting<K extends keyof AppSettings>(

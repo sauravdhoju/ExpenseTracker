@@ -210,7 +210,7 @@ export default function MoreScreen() {
           {
             icon: 'cloud-upload-outline',
             label: 'Cloud Backup & Sync',
-            future: true,
+            onPress: () => router.push('/settings/backup'),
           },
         ]}
       />

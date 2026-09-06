@@ -87,6 +87,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await processDueRecurringTransactions();
       await get().refreshAll();
       set({ isReady: true });
+      import('../services/cloudBackupService').then((m) => m.maybeRunAutoBackup().catch(() => {}));
     })();
     return bootstrapPromise;
   },

@@ -110,6 +110,9 @@ export interface AppSettings {
   onboardingComplete: boolean;
   notificationsEnabled: boolean;
   hideBalances: boolean;
+  cloudBackupEnabled: boolean;
+  cloudBackupIntervalDays: number;
+  lastCloudBackupAt: string | null;
 }
 
 export interface CategorySpending {
