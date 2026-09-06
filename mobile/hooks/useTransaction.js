@@ -1,66 +1,78 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
+import {
+  initDatabase,
+  getAllTransactions,
+  getSummary,
+  insertTransaction,
+  removeTransaction,
+} from '../db/database';
 
-const API_URL = 'https://expensetracker-z3hy.onrender.com/api';
-// const API_URL = 'http://localhost:5001/api';
-
-export const useTransactions = (userId) => {
+export const useTransactions = () => {
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({
     balance: 0,
     income: 0,
     expenses: 0,
   });
-
   const [isLoading, setIsLoading] = useState(true);
-
-  const fetchTransactions = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/transaction/${userId}`);
-      const data = await response.json();
-      setTransactions(data);
-    } catch (error) {
-      console.error('Error fetching transactions: ', error);
-    }
-  }, [userId]);
-
-  const fetchSummary = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/transaction/summary/${userId}`);
-      const data = await response.json();
-      setSummary(data);
-    } catch (error) {
-      console.error('Error fetching summary: ', error);
-    }
-  }, [userId]);
+  const initialized = useRef(false);
 
   const loadData = useCallback(async () => {
-    if (!userId) return;
-
     setIsLoading(true);
     try {
-      await Promise.all([fetchTransactions(), fetchSummary()]);
+      if (!initialized.current) {
+        await initDatabase();
+        initialized.current = true;
+      }
+      const [txns, sum] = await Promise.all([
+        getAllTransactions(),
+        getSummary(),
+      ]);
+      setTransactions(txns);
+      setSummary(sum);
     } catch (error) {
       console.error('Error loading data:', error);
+      Alert.alert('Error', 'Failed to load transactions.');
     } finally {
       setIsLoading(false);
     }
-  }, [fetchTransactions, fetchSummary, userId]);
+  }, []);
 
-  const deleteTransaction = async (id) => {
-    try {
-      const response = await fetch(`${API_URL}/transaction/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Failed to delete transaction');
+  const createTransaction = useCallback(
+    async (data) => {
+      try {
+        await insertTransaction(data);
+        await loadData();
+        return true;
+      } catch (error) {
+        console.error('Error creating transaction:', error);
+        Alert.alert('Error', 'Failed to save transaction.');
+        return false;
+      }
+    },
+    [loadData]
+  );
 
-      //Refresh data after deletion
-      loadData();
-      Alert.alert('Success', 'Transaction deleted successfully.');
-    } catch (error) {
-      console.error('Error deleting transaction:', error);
-      Alert.alert('Error', error.message);
-    }
+  const deleteTransaction = useCallback(
+    async (id) => {
+      try {
+        await removeTransaction(id);
+        await loadData();
+      } catch (error) {
+        console.error('Error deleting transaction:', error);
+        Alert.alert('Error', 'Failed to delete transaction.');
+      }
+    },
+    [loadData]
+  );
+
+  return {
+    transactions,
+    summary,
+    isLoading,
+    loadData,
+    createTransaction,
+    deleteTransaction,
   };
-  return { transactions, summary, isLoading, loadData, deleteTransaction };
 };
