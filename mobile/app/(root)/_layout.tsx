@@ -5,7 +5,14 @@ import ToastHost from '../../src/components/ui/Toast';
 export default function RootGroupLayout() {
   return (
     <View style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+        }}
+      >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="more" />
         <Stack.Screen name="transaction/new" options={{ presentation: 'modal' }} />
