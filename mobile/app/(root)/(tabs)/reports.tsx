@@ -13,6 +13,7 @@ import {
 import { addMonths, MONTH_NAMES, toISODate } from '../../../src/utils/date';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
+import PageHeader from '../../../src/components/ui/PageHeader';
 import EmptyState from '../../../src/components/ui/EmptyState';
 import DonutChart from '../../../src/components/charts/DonutChart';
 import BarChart from '../../../src/components/charts/BarChart';
@@ -81,7 +82,7 @@ export default function ReportsScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 130 }}>
-      <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.lg }}>Reports</Text>
+      <PageHeader title="Reports" subtitle={`${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()} overview`} />
 
       {/* Net worth */}
       <Card style={{ marginBottom: spacing.lg }}>

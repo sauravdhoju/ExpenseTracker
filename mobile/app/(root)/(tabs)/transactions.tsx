@@ -7,6 +7,7 @@ import { useAppStore } from '../../../src/store/useAppStore';
 import { groupLabel } from '../../../src/utils/date';
 import { spacing, radius } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
+import PageHeader from '../../../src/components/ui/PageHeader';
 import EmptyState from '../../../src/components/ui/EmptyState';
 import TransactionListItem from '../../../src/components/transactions/TransactionListItem';
 import type { Transaction, TransactionType } from '../../../src/types';
@@ -82,9 +83,10 @@ export default function TransactionsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
-      <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.md }}>
-        Transactions
-      </Text>
+      <PageHeader
+        title="Transactions"
+        subtitle={`${filtered.length} ${filtered.length === 1 ? 'transaction' : 'transactions'}`}
+      />
 
       <View
         style={{

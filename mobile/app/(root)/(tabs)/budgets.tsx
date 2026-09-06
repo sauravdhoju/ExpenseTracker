@@ -7,6 +7,7 @@ import { useAppStore } from '../../../src/store/useAppStore';
 import { filterByMonth, getBudgetUsage } from '../../../src/services/calculations';
 import { spacing, radius } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
+import PageHeader from '../../../src/components/ui/PageHeader';
 import ProgressBar from '../../../src/components/ui/ProgressBar';
 import EmptyState from '../../../src/components/ui/EmptyState';
 import Button from '../../../src/components/ui/Button';
@@ -56,16 +57,31 @@ export default function BudgetsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
-        <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>Budgets</Text>
-        <TouchableOpacity
-          onPress={openNew}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.full }}
-        >
-          <Ionicons name="add" size={16} color={colors.white} />
-          <Text style={{ color: colors.white, fontWeight: '600', fontSize: 13 }}>Add</Text>
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        title="Budgets"
+        subtitle={
+          budgets.length > 0
+            ? `${budgets.length} active ${budgets.length === 1 ? 'budget' : 'budgets'}`
+            : 'Set spending limits by category'
+        }
+        rightContent={
+          <TouchableOpacity
+            onPress={openNew}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              backgroundColor: colors.primary,
+              paddingVertical: 9,
+              paddingHorizontal: 14,
+              borderRadius: radius.full,
+            }}
+          >
+            <Ionicons name="add" size={16} color={colors.white} />
+            <Text style={{ color: colors.white, fontWeight: '700', fontSize: 13 }}>Add</Text>
+          </TouchableOpacity>
+        }
+      />
 
       {budgets.length === 0 ? (
         <Card>

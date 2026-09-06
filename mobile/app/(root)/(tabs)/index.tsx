@@ -17,6 +17,7 @@ import { generateInsights } from '../../../src/services/insightService';
 import { addMonths, MONTH_NAMES } from '../../../src/utils/date';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
+import PageHeader from '../../../src/components/ui/PageHeader';
 import IconCircle from '../../../src/components/ui/IconCircle';
 import EmptyState from '../../../src/components/ui/EmptyState';
 import BalanceSummary from '../../../src/components/dashboard/BalanceSummary';
@@ -73,32 +74,14 @@ export default function DashboardScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ padding: spacing.lg, paddingBottom: 130 }}
     >
-      {/* Header */}
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: spacing.lg,
-        }}
-      >
-        <View>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>
-            {getGreeting()} 👋
-          </Text>
-          <Text style={{ fontSize: 13, color: colors.textLight, marginTop: 2 }}>
-            {MONTH_NAMES[now.getMonth()]} {now.getDate()}, {now.getFullYear()}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <TouchableOpacity onPress={() => router.push('/bills')} hitSlop={8}>
-            <Ionicons name="notifications-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/more')} hitSlop={8}>
-            <Ionicons name="settings-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <PageHeader
+        title={`${getGreeting()} 👋`}
+        subtitle={`${MONTH_NAMES[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`}
+        actions={[
+          { icon: 'notifications-outline', onPress: () => router.push('/bills') },
+          { icon: 'settings-outline', onPress: () => router.push('/more') },
+        ]}
+      />
 
       <BalanceSummary balance={balance} income={income} expenses={expenses} />
 
