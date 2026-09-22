@@ -24,17 +24,24 @@ export default function TransactionListItem({ transaction, onDelete }: Props) {
   const account = accounts.find((a) => a.id === transaction.accountId);
   const toAccount = accounts.find((a) => a.id === transaction.toAccountId);
 
-  const isExpense = transaction.type === 'expense';
+  const isExpense = transaction.type === 'expense' || transaction.type === 'lent';
   const isTransfer = transaction.type === 'transfer';
+  const isLoanLinked = !!transaction.loanId;
   const sign = isTransfer ? '' : isExpense ? '-' : '+';
   const amountColor = isTransfer ? colors.text : isExpense ? colors.expense : colors.income;
 
-  const icon = isTransfer ? 'swap-horizontal' : (category?.icon as any) ?? 'pricetag';
-  const iconColor = isTransfer ? colors.primary : category?.color ?? colors.textLight;
+  const icon = isTransfer
+    ? 'swap-horizontal'
+    : transaction.type === 'lent'
+      ? 'arrow-up-circle-outline'
+      : transaction.type === 'repayment'
+        ? 'arrow-down-circle-outline'
+        : ((category?.icon as any) ?? 'pricetag');
+  const iconColor = isTransfer || isLoanLinked ? colors.primary : (category?.color ?? colors.textLight);
 
   const subtitle = isTransfer
     ? `${account?.name ?? ''} → ${toAccount?.name ?? ''}`
-    : `${account?.name ?? ''}${category ? ' · ' + category.name : ''}`;
+    : `${transaction.time}${account ? ' · ' + account.name : ''}${category ? ' · ' + category.name : ''}`;
 
   const confirmDelete = () => {
     Alert.alert('Delete transaction', 'This will reverse its effect on your account balance.', [
@@ -43,11 +50,19 @@ export default function TransactionListItem({ transaction, onDelete }: Props) {
     ]);
   };
 
+  const openDetail = () => {
+    if (isLoanLinked) {
+      router.push({ pathname: '/loans/[id]', params: { id: transaction.loanId! } });
+    } else {
+      router.push({ pathname: '/transaction/[id]', params: { id: transaction.id } });
+    }
+  };
+
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      onLongPress={confirmDelete}
-      onPress={() => router.push({ pathname: '/transaction/[id]', params: { id: transaction.id } })}
+      onLongPress={isLoanLinked ? openDetail : confirmDelete}
+      onPress={openDetail}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -68,9 +83,11 @@ export default function TransactionListItem({ transaction, onDelete }: Props) {
           {sign}
           {format(transaction.amount)}
         </Text>
-        <TouchableOpacity onPress={confirmDelete} hitSlop={8} style={{ marginTop: 4 }}>
-          <Ionicons name="trash-outline" size={14} color={colors.textLight} />
-        </TouchableOpacity>
+        {!isLoanLinked && (
+          <TouchableOpacity onPress={confirmDelete} hitSlop={8} style={{ marginTop: 4 }}>
+            <Ionicons name="trash-outline" size={14} color={colors.textLight} />
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );

@@ -13,8 +13,15 @@ import {
   getNetWorth,
   getGoalProgress,
   getSpendingTrend,
+  getTotalLent,
+  getTotalRepaid,
+  getLoanOutstanding,
+  getLoanStatus,
+  getLoanSummary,
+  getMonthlyStatement,
+  getMoneyWentSummary,
 } from '../calculations';
-import type { Account, Budget, Goal, Transaction } from '../../types';
+import type { Account, Budget, Goal, Loan, LoanRepayment, Transaction } from '../../types';
 
 function makeTransaction(overrides: Partial<Transaction>): Transaction {
   return {
@@ -27,7 +34,9 @@ function makeTransaction(overrides: Partial<Transaction>): Transaction {
     title: 'Test',
     notes: null,
     date: '2026-09-01',
+    time: '12:00',
     recurringId: null,
+    loanId: null,
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
     ...overrides,
@@ -267,5 +276,119 @@ describe('getSpendingTrend', () => {
 
   it('reports flat for small changes', () => {
     expect(getSpendingTrend(1020, 1000)).toBe('flat');
+  });
+});
+
+function makeLoan(overrides: Partial<Loan>): Loan {
+  return {
+    id: 'loan1',
+    personName: 'Ram',
+    originalAmount: 5000,
+    lentDate: '2026-09-01',
+    expectedReturnDate: '2026-09-30',
+    reason: null,
+    note: null,
+    accountId: 'acc1',
+    reminderEnabled: true,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeRepayment(overrides: Partial<LoanRepayment>): LoanRepayment {
+  return {
+    id: 'rep1',
+    loanId: 'loan1',
+    amount: 1000,
+    date: '2026-09-10',
+    accountId: 'acc1',
+    note: null,
+    createdAt: '2026-09-10T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('getTotalLent / getTotalRepaid', () => {
+  it('sums only lent/repayment transactions', () => {
+    const transactions = [
+      makeTransaction({ id: '1', type: 'lent', amount: 5000, categoryId: null }),
+      makeTransaction({ id: '2', type: 'repayment', amount: 2000, categoryId: null }),
+      makeTransaction({ id: '3', type: 'expense', amount: 300 }),
+    ];
+    expect(getTotalLent(transactions)).toBe(5000);
+    expect(getTotalRepaid(transactions)).toBe(2000);
+  });
+});
+
+describe('loan outstanding / status / summary', () => {
+  it('computes outstanding as originalAmount minus repayments for that loan', () => {
+    const loan = makeLoan({});
+    const repayments = [
+      makeRepayment({ id: 'r1', loanId: 'loan1', amount: 1000 }),
+      makeRepayment({ id: 'r2', loanId: 'loan1', amount: 1500 }),
+      makeRepayment({ id: 'r3', loanId: 'other-loan', amount: 9999 }),
+    ];
+    expect(getLoanOutstanding(loan, repayments)).toBe(2500);
+  });
+
+  it('reports outstanding/partial/repaid status correctly', () => {
+    const loan = makeLoan({ originalAmount: 1000 });
+    expect(getLoanStatus(loan, [])).toBe('outstanding');
+    expect(getLoanStatus(loan, [makeRepayment({ amount: 400 })])).toBe('partial');
+    expect(getLoanStatus(loan, [makeRepayment({ amount: 1000 })])).toBe('repaid');
+  });
+
+  it('summarizes total lent, outstanding, recovered and people owing across loans', () => {
+    const loans = [
+      makeLoan({ id: 'a', originalAmount: 5000 }),
+      makeLoan({ id: 'b', originalAmount: 3000 }),
+    ];
+    const repayments = [
+      makeRepayment({ id: 'r1', loanId: 'a', amount: 5000 }), // fully repaid
+      makeRepayment({ id: 'r2', loanId: 'b', amount: 1000 }), // partially repaid
+    ];
+    const summary = getLoanSummary(loans, repayments);
+    expect(summary.totalLent).toBe(8000);
+    expect(summary.recovered).toBe(6000);
+    expect(summary.outstanding).toBe(2000);
+    expect(summary.peopleOwing).toBe(1);
+  });
+});
+
+describe('getMonthlyStatement', () => {
+  it('computes opening/closing balance from prior and current month transactions', () => {
+    const accounts = [makeAccount({ id: 'acc1', initialBalance: 20000 })];
+    const transactions = [
+      makeTransaction({ id: '1', type: 'income', amount: 10000, date: '2026-08-15' }),
+      makeTransaction({ id: '2', type: 'income', amount: 50000, date: '2026-09-05' }),
+      makeTransaction({ id: '3', type: 'expense', amount: 32450, date: '2026-09-10' }),
+      makeTransaction({ id: '4', type: 'lent', amount: 5000, date: '2026-09-12', categoryId: null }),
+      makeTransaction({ id: '5', type: 'repayment', amount: 2000, date: '2026-09-20', categoryId: null }),
+    ];
+    const statement = getMonthlyStatement(transactions, accounts, new Date('2026-09-15'));
+    expect(statement.openingBalance).toBe(30000);
+    expect(statement.income).toBe(50000);
+    expect(statement.expenses).toBe(32450);
+    expect(statement.lent).toBe(5000);
+    expect(statement.repaid).toBe(2000);
+    expect(statement.closingBalance).toBe(30000 + 50000 - 32450 - 5000 + 2000);
+  });
+});
+
+describe('getMoneyWentSummary', () => {
+  it('computes remaining as income minus spent minus lent, and includes recurring total', () => {
+    const transactions = [
+      makeTransaction({ id: '1', type: 'income', amount: 50000 }),
+      makeTransaction({ id: '2', type: 'expense', amount: 32450 }),
+      makeTransaction({ id: '3', type: 'lent', amount: 5000, categoryId: null }),
+    ];
+    const recurring = [{ type: 'expense' as const, amount: 1200, frequency: 'monthly', isActive: true }];
+    const summary = getMoneyWentSummary(transactions, recurring);
+    expect(summary.income).toBe(50000);
+    expect(summary.spent).toBe(32450);
+    expect(summary.lent).toBe(5000);
+    expect(summary.remaining).toBe(12550);
+    expect(summary.recurringTotal).toBe(1200);
   });
 });

@@ -14,6 +14,18 @@ export function initDatabase(): Promise<void> {
   return initPromise;
 }
 
+async function addColumnIfMissing(
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string,
+  ddl: string
+): Promise<void> {
+  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!cols.some((c) => c.name === column)) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+
 async function runMigrations(): Promise<void> {
   const db = await getDb();
   await db.execAsync('PRAGMA foreign_keys = ON;');
@@ -121,12 +133,42 @@ async function runMigrations(): Promise<void> {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS loans (
+      id TEXT PRIMARY KEY,
+      person_name TEXT NOT NULL,
+      original_amount REAL NOT NULL,
+      lent_date TEXT NOT NULL,
+      expected_return_date TEXT,
+      reason TEXT,
+      note TEXT,
+      account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+      reminder_enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS loan_repayments (
+      id TEXT PRIMARY KEY,
+      loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+      note TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
+
+  await addColumnIfMissing(db, 'transactions', 'time', "time TEXT NOT NULL DEFAULT '00:00'");
+  await addColumnIfMissing(db, 'transactions', 'loan_id', 'loan_id TEXT REFERENCES loans(id) ON DELETE SET NULL');
+  await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_loan ON transactions(loan_id);');
 }
 
 export async function resetDatabase(): Promise<void> {
   const db = await getDb();
   await db.execAsync(`
+    DROP TABLE IF EXISTS loan_repayments;
+    DROP TABLE IF EXISTS loans;
     DROP TABLE IF EXISTS transactions;
     DROP TABLE IF EXISTS recurring_transactions;
     DROP TABLE IF EXISTS budgets;

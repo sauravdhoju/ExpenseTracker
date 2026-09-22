@@ -9,7 +9,11 @@ import * as billRepo from '../database/billRepo';
 import * as goalRepo from '../database/goalRepo';
 import * as settingsRepo from '../database/settingsRepo';
 import * as shortcutRepo from '../database/shortcutRepo';
+import * as loanRepo from '../database/loanRepo';
+import * as loanRepaymentRepo from '../database/loanRepaymentRepo';
 import { processDueRecurringTransactions } from '../services/recurringService';
+import { getBudgetUsage } from '../services/calculations';
+import { sendBudgetWarning, scheduleLoanReminder, cancelLoanReminder } from '../services/notificationService';
 import type {
   Account,
   AppSettings,
@@ -17,6 +21,8 @@ import type {
   Budget,
   Category,
   Goal,
+  Loan,
+  LoanRepayment,
   RecurringTransaction,
   Shortcut,
   Transaction,
@@ -32,6 +38,8 @@ interface AppState {
   bills: Bill[];
   goals: Goal[];
   shortcuts: Shortcut[];
+  loans: Loan[];
+  repayments: LoanRepayment[];
   settings: AppSettings;
 
   bootstrap: () => Promise<void>;
@@ -71,6 +79,12 @@ interface AppState {
   removeShortcut: (id: string) => Promise<void>;
   reorderShortcuts: (orderedIds: string[]) => Promise<void>;
 
+  addLoan: (input: loanRepo.CreateLoanInput) => Promise<Loan>;
+  editLoan: (id: string, input: loanRepo.CreateLoanInput) => Promise<void>;
+  removeLoan: (id: string) => Promise<void>;
+  addRepayment: (input: loanRepaymentRepo.CreateRepaymentInput) => Promise<void>;
+  removeRepayment: (id: string) => Promise<void>;
+
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>;
 }
 
@@ -86,6 +100,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   bills: [],
   goals: [],
   shortcuts: [],
+  loans: [],
+  repayments: [],
   settings: settingsRepo.DEFAULT_SETTINGS,
 
   bootstrap: async () => {
@@ -102,7 +118,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshAll: async () => {
-    const [accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, settings] =
+    const [accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, loans, repayments, settings] =
       await Promise.all([
         accountRepo.getAllAccounts(),
         categoryRepo.getAllCategories(),
@@ -112,9 +128,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         billRepo.getAllBills(),
         goalRepo.getAllGoals(),
         shortcutRepo.getAllShortcuts(),
+        loanRepo.getAllLoans(),
+        loanRepaymentRepo.getAllRepayments(),
         settingsRepo.getAllSettings(),
       ]);
-    set({ accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, settings });
+    set({ accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, loans, repayments, settings });
   },
 
   addAccount: async (input) => {
@@ -150,8 +168,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addTransaction: async (input) => {
+    const { settings, budgets, transactions, categories } = get();
+    let before: { spent: number } | null = null;
+    const budget =
+      input.type === 'expense'
+        ? budgets.find((b) => b.categoryId === input.categoryId) ?? budgets.find((b) => b.categoryId === null)
+        : null;
+    if (budget && settings.budgetAlertEnabled) {
+      before = { spent: getBudgetUsage(budget, transactions).spent };
+    }
+
     const transaction = await transactionRepo.createTransaction(input);
     await get().refreshAll();
+
+    if (budget && before && settings.budgetAlertEnabled) {
+      const after = getBudgetUsage(budget, get().transactions);
+      const beforePercent = budget.amount > 0 ? (before.spent / budget.amount) * 100 : 0;
+      if (beforePercent < settings.budgetAlertThreshold && after.percentUsed >= settings.budgetAlertThreshold) {
+        const categoryName = budget.categoryId
+          ? categories.find((c) => c.id === budget.categoryId)?.name ?? 'Overall'
+          : 'Overall';
+        sendBudgetWarning(categoryName, after.percentUsed).catch(() => {});
+      }
+    }
+
     return transaction;
   },
   editTransaction: async (id, input) => {
@@ -231,6 +271,91 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   reorderShortcuts: async (orderedIds) => {
     await shortcutRepo.reorderShortcuts(orderedIds);
+    await get().refreshAll();
+  },
+
+  addLoan: async (input) => {
+    const loan = await loanRepo.createLoan(input);
+    // The linked transaction reuses the loan's own id, so lookups/deletes never need a search.
+    await transactionRepo.createTransaction({
+      id: loan.id,
+      type: 'lent',
+      amount: loan.originalAmount,
+      accountId: loan.accountId,
+      categoryId: null,
+      title: `Lent to ${loan.personName}`,
+      date: loan.lentDate,
+      loanId: loan.id,
+    });
+    await get().refreshAll();
+
+    const { settings } = get();
+    if (settings.lentReminderEnabled && loan.reminderEnabled && loan.expectedReturnDate) {
+      scheduleLoanReminder(
+        loan.id,
+        loan.personName,
+        String(loan.originalAmount),
+        new Date(loan.expectedReturnDate + 'T00:00:00')
+      ).catch(() => {});
+    }
+    return loan;
+  },
+  editLoan: async (id, input) => {
+    await loanRepo.updateLoan(id, input);
+    await transactionRepo.updateTransaction(id, {
+      type: 'lent',
+      amount: input.originalAmount,
+      accountId: input.accountId,
+      categoryId: null,
+      title: `Lent to ${input.personName}`,
+      date: input.lentDate,
+      loanId: id,
+    });
+    await get().refreshAll();
+
+    const { settings } = get();
+    if (settings.lentReminderEnabled && (input.reminderEnabled ?? true) && input.expectedReturnDate) {
+      scheduleLoanReminder(
+        id,
+        input.personName,
+        String(input.originalAmount),
+        new Date(input.expectedReturnDate + 'T00:00:00')
+      ).catch(() => {});
+    } else {
+      cancelLoanReminder(id).catch(() => {});
+    }
+  },
+  removeLoan: async (id) => {
+    const linkedRepaymentIds = get().repayments.filter((r) => r.loanId === id).map((r) => r.id);
+    for (const repaymentId of linkedRepaymentIds) {
+      await transactionRepo.deleteTransaction(repaymentId);
+      await loanRepaymentRepo.deleteRepayment(repaymentId);
+    }
+    await transactionRepo.deleteTransaction(id);
+    await loanRepo.deleteLoan(id);
+    cancelLoanReminder(id).catch(() => {});
+    await get().refreshAll();
+  },
+  addRepayment: async (input) => {
+    const loan = get().loans.find((l) => l.id === input.loanId);
+    const repayment = await loanRepaymentRepo.createRepayment(input);
+    // The linked transaction reuses the repayment's own id, so lookups/deletes never need a search.
+    await transactionRepo.createTransaction({
+      id: repayment.id,
+      type: 'repayment',
+      amount: input.amount,
+      accountId: input.accountId,
+      categoryId: null,
+      title: loan ? `Repayment from ${loan.personName}` : 'Loan repayment',
+      date: input.date,
+      notes: input.note,
+      loanId: input.loanId,
+    });
+    await get().refreshAll();
+  },
+  removeRepayment: async (id) => {
+    await transactionRepo.deleteTransaction(id);
+    await loanRepaymentRepo.deleteRepayment(id);
     await get().refreshAll();
   },
 

@@ -7,7 +7,10 @@ import { getAllTransactions } from '../database/transactionRepo';
 import { getAllBudgets } from '../database/budgetRepo';
 import { getAllGoals } from '../database/goalRepo';
 import { getAllRecurring } from '../database/recurringRepo';
+import { getAllLoans } from '../database/loanRepo';
+import { getAllRepayments } from '../database/loanRepaymentRepo';
 import { getDb, resetDatabase } from '../database/db';
+import type { Transaction } from '../types';
 
 export interface BackupData {
   version: 1;
@@ -18,10 +21,12 @@ export interface BackupData {
   budgets: Awaited<ReturnType<typeof getAllBudgets>>;
   goals: Awaited<ReturnType<typeof getAllGoals>>;
   recurringTransactions: Awaited<ReturnType<typeof getAllRecurring>>;
+  loans: Awaited<ReturnType<typeof getAllLoans>>;
+  loanRepayments: Awaited<ReturnType<typeof getAllRepayments>>;
 }
 
 export async function buildBackup(): Promise<BackupData> {
-  const [accounts, categories, transactions, budgets, goals, recurringTransactions] =
+  const [accounts, categories, transactions, budgets, goals, recurringTransactions, loans, loanRepayments] =
     await Promise.all([
       getAllAccounts(),
       getAllCategories(),
@@ -29,6 +34,8 @@ export async function buildBackup(): Promise<BackupData> {
       getAllBudgets(),
       getAllGoals(),
       getAllRecurring(),
+      getAllLoans(),
+      getAllRepayments(),
     ]);
   return {
     version: 1,
@@ -39,6 +46,8 @@ export async function buildBackup(): Promise<BackupData> {
     budgets,
     goals,
     recurringTransactions,
+    loans,
+    loanRepayments,
   };
 }
 
@@ -97,6 +106,37 @@ export async function exportTransactionsAsCSV(): Promise<string> {
   return writeAndShare(filename, rows.join('\n'), 'text/csv');
 }
 
+const SIGNED_TYPES = new Set(['income', 'repayment']);
+
+/** Bank-statement-style export: every transaction with date, time, description, category, payment method, type, and a signed amount. */
+export async function exportStatementAsCSV(transactionsOverride?: Transaction[]): Promise<string> {
+  const [transactions, categories, accounts] = await Promise.all([
+    transactionsOverride ? Promise.resolve(transactionsOverride) : getAllTransactions(),
+    getAllCategories(),
+    getAllAccounts(),
+  ]);
+  const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? '';
+  const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? '';
+
+  const rows = [
+    toCsvRow(['Date', 'Time', 'Description', 'Category', 'Payment Method', 'Type', 'Amount']),
+    ...transactions.map((t) =>
+      toCsvRow([
+        t.date,
+        t.time,
+        t.title,
+        categoryName(t.categoryId),
+        accountName(t.accountId),
+        t.type,
+        `${SIGNED_TYPES.has(t.type) ? '+' : t.type === 'transfer' ? '' : '-'}${t.amount}`,
+      ])
+    ),
+  ];
+
+  const filename = `statement-${Date.now()}.csv`;
+  return writeAndShare(filename, rows.join('\n'), 'text/csv');
+}
+
 export async function pickBackupFile(): Promise<BackupData | null> {
   const result = await DocumentPicker.getDocumentAsync({
     type: 'application/json',
@@ -133,12 +173,30 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
     );
   }
 
+  // Loans are inserted before transactions since transactions.loan_id references loans(id).
+  for (const l of backup.loans ?? []) {
+    await db.runAsync(
+      `INSERT INTO loans (id, person_name, original_amount, lent_date, expected_return_date, reason, note, account_id, reminder_enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      l.id, l.personName, l.originalAmount, l.lentDate, l.expectedReturnDate, l.reason, l.note,
+      l.accountId, l.reminderEnabled ? 1 : 0, l.createdAt, l.updatedAt
+    );
+  }
+
   for (const t of backup.transactions) {
     await db.runAsync(
-      `INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id, title, notes, date, recurring_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       t.id, t.type, t.amount, t.accountId, t.toAccountId, t.categoryId, t.title, t.notes,
-      t.date, t.recurringId, t.createdAt, t.updatedAt
+      t.date, t.time ?? '00:00', t.recurringId, t.loanId ?? null, t.createdAt, t.updatedAt
+    );
+  }
+
+  for (const r of backup.loanRepayments ?? []) {
+    await db.runAsync(
+      `INSERT INTO loan_repayments (id, loan_id, amount, date, account_id, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      r.id, r.loanId, r.amount, r.date, r.accountId, r.note, r.createdAt
     );
   }
 

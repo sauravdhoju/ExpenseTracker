@@ -37,11 +37,22 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
       icon: 'swap-horizontal' as const,
       color: colors.primary,
     },
+    {
+      type: 'lent',
+      label: 'Lent Money',
+      subtitle: 'Track money given to someone',
+      icon: 'people-circle' as const,
+      color: colors.primary,
+    },
   ];
 
   const handlePick = (type: string) => {
     onClose();
-    router.push({ pathname: '/transaction/new', params: { type } });
+    if (type === 'lent') {
+      router.push('/loans/new');
+    } else {
+      router.push({ pathname: '/transaction/new', params: { type } });
+    }
   };
 
   return (

@@ -7,7 +7,10 @@ import { useCurrency } from '../../../src/hooks/useCurrency';
 import { useAppStore } from '../../../src/store/useAppStore';
 import {
   filterByMonth,
+  getCategorySpending,
   getDailyAverage,
+  getLoanSummary,
+  getMoneyWentSummary,
   getMonthlyComparison,
   getTotalBalance,
   getTotalExpenses,
@@ -46,6 +49,9 @@ export default function DashboardScreen() {
   const categories = useAppStore((s) => s.categories);
   const budgets = useAppStore((s) => s.budgets);
   const shortcuts = useAppStore((s) => s.shortcuts);
+  const recurring = useAppStore((s) => s.recurring);
+  const loans = useAppStore((s) => s.loans);
+  const repayments = useAppStore((s) => s.repayments);
   const removeTransaction = useAppStore((s) => s.removeTransaction);
 
   const [activeShortcut, setActiveShortcut] = useState<Shortcut | null>(null);
@@ -71,6 +77,10 @@ export default function DashboardScreen() {
   );
 
   const recentTransactions = transactions.slice(0, 5);
+
+  const moneyWent = useMemo(() => getMoneyWentSummary(monthTransactions, recurring), [monthTransactions, recurring]);
+  const categoryBreakdown = useMemo(() => getCategorySpending(monthTransactions).slice(0, 5), [monthTransactions]);
+  const loanSummary = useMemo(() => getLoanSummary(loans, repayments), [loans, repayments]);
 
   return (
     <ScrollView
@@ -144,6 +154,78 @@ export default function DashboardScreen() {
       </ScrollView>
 
       <ShortcutConfirmSheet shortcut={activeShortcut} onClose={() => setActiveShortcut(null)} />
+
+      {/* Where did my money go? */}
+      <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>
+          Where did my money go?
+        </Text>
+        <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
+          {[
+            { label: 'Income', value: moneyWent.income, color: colors.income },
+            { label: 'Spent', value: moneyWent.spent, color: colors.expense },
+            { label: 'Lent to others', value: moneyWent.lent, color: colors.expense },
+            { label: 'Recurring expenses', value: moneyWent.recurringTotal, color: colors.textLight },
+            { label: 'Remaining', value: moneyWent.remaining, color: colors.text },
+          ].map((row) => (
+            <View key={row.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 13.5, color: colors.textLight }}>{row.label}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: row.color }}>{format(row.value)}</Text>
+            </View>
+          ))}
+        </View>
+
+        {categoryBreakdown.length > 0 && (
+          <>
+            <View style={{ height: 1, backgroundColor: colors.border, marginBottom: spacing.md }} />
+            {categoryBreakdown.map((c) => {
+              const category = categories.find((cat) => cat.id === c.categoryId);
+              return (
+                <TouchableOpacity
+                  key={c.categoryId}
+                  onPress={() =>
+                    router.push({ pathname: '/(root)/(tabs)/transactions', params: { categoryId: c.categoryId } })
+                  }
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 }}>
+                    <Ionicons
+                      name={(category?.icon as any) ?? 'pricetag'}
+                      size={14}
+                      color={category?.color ?? colors.textLight}
+                    />
+                    <Text style={{ fontSize: 13, color: colors.text }} numberOfLines={1}>
+                      {category?.name ?? 'Other'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{format(c.amount)}</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.textLight} style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
+      </Card>
+
+      {/* Who owes you */}
+      <TouchableOpacity onPress={() => router.push('/loans')}>
+        <Card style={{ marginBottom: spacing.lg, flexDirection: 'row', alignItems: 'center' }}>
+          <IconCircle name="people-outline" color={colors.primary} size={44} />
+          <View style={{ flex: 1, marginLeft: spacing.md }}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>Who owes you</Text>
+            <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2 }}>
+              {loanSummary.peopleOwing} {loanSummary.peopleOwing === 1 ? 'person' : 'people'} ·{' '}
+              {format(loanSummary.outstanding)} outstanding
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+        </Card>
+      </TouchableOpacity>
 
       {/* Spending overview */}
       <Card style={{ marginBottom: spacing.lg }}>

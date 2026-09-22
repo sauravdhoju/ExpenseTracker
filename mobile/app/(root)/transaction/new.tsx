@@ -20,17 +20,21 @@ import { CURRENCIES } from '../../../src/constants/currencies';
 import Button from '../../../src/components/ui/Button';
 import DateField from '../../../src/components/ui/DateField';
 
-import type { RecurringFrequency, TransactionType } from '../../../src/types';
+import type { RecurringFrequency } from '../../../src/types';
+
+// This screen only ever creates expense/income/transfer transactions; 'lent'/'repayment'
+// transactions are created via the Lent Money flow so their linked loan stays in sync.
+type ManualTransactionType = 'expense' | 'income' | 'transfer';
 
 const FREQUENCIES: RecurringFrequency[] = ['daily', 'weekly', 'monthly', 'yearly'];
-const TRANSACTION_TYPES: TransactionType[] = ['expense', 'income', 'transfer'];
+const TRANSACTION_TYPES: ManualTransactionType[] = ['expense', 'income', 'transfer'];
 
 export default function NewTransactionScreen() {
   const colors = useThemeColors();
   const router = useRouter();
 
   const params = useLocalSearchParams<{ type?: string; categoryId?: string }>();
-  const initialType = (params.type as TransactionType) ?? 'expense';
+  const initialType = (params.type as ManualTransactionType) ?? 'expense';
 
   const accounts = useAppStore((s) => s.accounts);
   const categories = useAppStore((s) => s.categories);
@@ -39,7 +43,7 @@ export default function NewTransactionScreen() {
   const currency = useAppStore((s) => s.settings.currency);
   const currencySymbol = CURRENCIES[currency].symbol;
 
-  const [type, setType] = useState<TransactionType>(initialType);
+  const [type, setType] = useState<ManualTransactionType>(initialType);
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(params.categoryId ?? null);
   const [accountId, setAccountId] = useState<string | null>(accounts[0]?.id ?? null);

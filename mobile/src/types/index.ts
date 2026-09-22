@@ -36,7 +36,7 @@ export interface Category {
   createdAt: string;
 }
 
-export type TransactionType = 'expense' | 'income' | 'transfer';
+export type TransactionType = 'expense' | 'income' | 'transfer' | 'lent' | 'repayment';
 
 export interface Transaction {
   id: string;
@@ -44,11 +44,13 @@ export interface Transaction {
   amount: number; // always positive; sign/direction derived from `type`
   accountId: string;
   toAccountId: string | null; // only for transfers
-  categoryId: string | null; // null for transfers
+  categoryId: string | null; // null for transfers, lent, and repayment
   title: string;
   notes: string | null;
   date: string; // ISO date (YYYY-MM-DD)
+  time: string; // HH:mm, captured automatically at insert time
   recurringId: string | null; // set if generated from a recurring transaction
+  loanId: string | null; // set if generated from a lent/repayment action
   createdAt: string;
   updatedAt: string;
 }
@@ -113,7 +115,35 @@ export interface Goal {
   createdAt: string;
 }
 
+export type LoanStatus = 'outstanding' | 'partial' | 'repaid';
+
+export interface Loan {
+  id: string;
+  personName: string;
+  originalAmount: number;
+  lentDate: string;
+  expectedReturnDate: string | null;
+  reason: string | null;
+  note: string | null;
+  accountId: string; // source of funds
+  reminderEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoanRepayment {
+  id: string;
+  loanId: string;
+  amount: number;
+  date: string;
+  accountId: string; // where the repayment lands
+  note: string | null;
+  createdAt: string;
+}
+
 export type ThemeMode = 'light' | 'dark' | 'system';
+
+export type ReminderFrequency = 'daily' | 'weekly' | 'monthly';
 
 export interface AppSettings {
   currency: CurrencyCode;
@@ -124,6 +154,13 @@ export interface AppSettings {
   cloudBackupEnabled: boolean;
   cloudBackupIntervalDays: number;
   lastCloudBackupAt: string | null;
+  expenseReminderEnabled: boolean;
+  expenseReminderTime: string; // 'HH:mm'
+  expenseReminderFrequency: ReminderFrequency;
+  budgetAlertEnabled: boolean;
+  budgetAlertThreshold: number; // percent
+  recurringReminderEnabled: boolean;
+  lentReminderEnabled: boolean;
 }
 
 export interface CategorySpending {

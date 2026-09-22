@@ -4,12 +4,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import SafeScreen from '../src/components/ui/SafeScreen';
 import PageLoader from '../src/components/ui/PageLoader';
 import { useAppStore } from '../src/store/useAppStore';
-import { syncDailyExpenseReminder } from '../src/services/notificationService';
+import { syncExpenseReminder } from '../src/services/notificationService';
 
 function RootLayoutContent() {
   const isReady = useAppStore((s) => s.isReady);
   const onboardingComplete = useAppStore((s) => s.settings.onboardingComplete);
   const notificationsEnabled = useAppStore((s) => s.settings.notificationsEnabled);
+  const expenseReminderEnabled = useAppStore((s) => s.settings.expenseReminderEnabled);
+  const expenseReminderTime = useAppStore((s) => s.settings.expenseReminderTime);
+  const expenseReminderFrequency = useAppStore((s) => s.settings.expenseReminderFrequency);
   const bootstrap = useAppStore((s) => s.bootstrap);
   const pathname = usePathname();
 
@@ -19,8 +22,13 @@ function RootLayoutContent() {
 
   useEffect(() => {
     if (!isReady) return;
-    syncDailyExpenseReminder(notificationsEnabled);
-  }, [isReady, notificationsEnabled]);
+    syncExpenseReminder({
+      notificationsEnabled,
+      expenseReminderEnabled,
+      expenseReminderTime,
+      expenseReminderFrequency,
+    });
+  }, [isReady, notificationsEnabled, expenseReminderEnabled, expenseReminderTime, expenseReminderFrequency]);
 
   if (!isReady) {
     return (

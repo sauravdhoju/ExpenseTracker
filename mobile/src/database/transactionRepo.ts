@@ -13,7 +13,9 @@ interface TransactionRow {
   title: string;
   notes: string | null;
   date: string;
+  time: string;
   recurring_id: string | null;
+  loan_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,7 +31,9 @@ function mapRow(row: TransactionRow): Transaction {
     title: row.title,
     notes: row.notes,
     date: row.date,
+    time: row.time,
     recurringId: row.recurring_id,
+    loanId: row.loan_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -53,6 +57,7 @@ export async function getTransactionById(id: string): Promise<Transaction | null
 }
 
 export interface CreateTransactionInput {
+  id?: string; // allows a caller to link this transaction's id to another entity (e.g. a loan/repayment row)
   type: TransactionType;
   amount: number;
   accountId: string;
@@ -61,7 +66,13 @@ export interface CreateTransactionInput {
   title: string;
   notes?: string | null;
   date: string;
+  time?: string;
   recurringId?: string | null;
+  loanId?: string | null;
+}
+
+function currentTime(): string {
+  return new Date().toTimeString().slice(0, 5);
 }
 
 async function applyBalanceEffect(t: {
@@ -70,9 +81,9 @@ async function applyBalanceEffect(t: {
   accountId: string;
   toAccountId: string | null;
 }) {
-  if (t.type === 'expense') {
+  if (t.type === 'expense' || t.type === 'lent') {
     await adjustAccountBalance(t.accountId, -t.amount);
-  } else if (t.type === 'income') {
+  } else if (t.type === 'income' || t.type === 'repayment') {
     await adjustAccountBalance(t.accountId, t.amount);
   } else if (t.type === 'transfer' && t.toAccountId) {
     await adjustAccountBalance(t.accountId, -t.amount);
@@ -86,9 +97,9 @@ async function reverseBalanceEffect(t: {
   accountId: string;
   toAccountId: string | null;
 }) {
-  if (t.type === 'expense') {
+  if (t.type === 'expense' || t.type === 'lent') {
     await adjustAccountBalance(t.accountId, t.amount);
-  } else if (t.type === 'income') {
+  } else if (t.type === 'income' || t.type === 'repayment') {
     await adjustAccountBalance(t.accountId, -t.amount);
   } else if (t.type === 'transfer' && t.toAccountId) {
     await adjustAccountBalance(t.accountId, t.amount);
@@ -100,13 +111,14 @@ export async function createTransaction(
   input: CreateTransactionInput
 ): Promise<Transaction> {
   const db = await getDb();
-  const id = generateId();
+  const id = input.id ?? generateId();
   const now = new Date().toISOString();
+  const time = input.time ?? currentTime();
 
   await db.runAsync(
     `INSERT INTO transactions
-       (id, type, amount, account_id, to_account_id, category_id, title, notes, date, recurring_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.type,
     input.amount,
@@ -116,7 +128,9 @@ export async function createTransaction(
     input.title,
     input.notes ?? null,
     input.date,
+    time,
     input.recurringId ?? null,
+    input.loanId ?? null,
     now,
     now
   );
@@ -138,7 +152,9 @@ export async function createTransaction(
     title: input.title,
     notes: input.notes ?? null,
     date: input.date,
+    time,
     recurringId: input.recurringId ?? null,
+    loanId: input.loanId ?? null,
     createdAt: now,
     updatedAt: now,
   };

@@ -10,6 +10,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cloudBackupEnabled: false,
   cloudBackupIntervalDays: 30,
   lastCloudBackupAt: null,
+  expenseReminderEnabled: true,
+  expenseReminderTime: '20:00',
+  expenseReminderFrequency: 'daily',
+  budgetAlertEnabled: true,
+  budgetAlertThreshold: 80,
+  recurringReminderEnabled: true,
+  lentReminderEnabled: true,
 };
 
 export async function getSetting<K extends keyof AppSettings>(

@@ -168,6 +168,11 @@ export default function MoreScreen() {
             label: 'Financial Goals',
             onPress: () => router.push('/goals'),
           },
+          {
+            icon: 'people-outline',
+            label: 'Lent Money',
+            onPress: () => router.push('/loans'),
+          },
         ]}
       />
 

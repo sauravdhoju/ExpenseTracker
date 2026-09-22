@@ -15,6 +15,7 @@ export default function NewBillScreen() {
   const router = useRouter();
   const addBill = useAppStore((s) => s.addBill);
   const notificationsEnabled = useAppStore((s) => s.settings.notificationsEnabled);
+  const recurringReminderEnabled = useAppStore((s) => s.settings.recurringReminderEnabled);
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -30,7 +31,7 @@ export default function NewBillScreen() {
     setIsSaving(true);
     try {
       await addBill({ title: title.trim(), amount: parsed, dueDate });
-      if (notificationsEnabled) {
+      if (notificationsEnabled && recurringReminderEnabled) {
         await scheduleBillReminder('manual-' + Date.now(), title.trim(), amount, new Date(dueDate + 'T00:00:00'));
       }
       router.back();

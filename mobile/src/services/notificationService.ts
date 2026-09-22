@@ -77,7 +77,7 @@ export async function sendBudgetWarning(categoryName: string, percentUsed: numbe
   });
 }
 
-const DAILY_EXPENSE_REMINDER_ID_PREFIX = 'daily-expense-reminder-';
+const EXPENSE_REMINDER_ID = 'expense-reminder';
 
 const EXPENSE_REMINDER_MESSAGES = [
   "Don't forget to log today's expenses!",
@@ -92,63 +92,128 @@ const EXPENSE_REMINDER_MESSAGES = [
   'Keep your streak going — add today\'s expenses before bed!',
 ];
 
-// Morning, afternoon, and evening nudges.
-const DAILY_REMINDER_TIMES = [
-  { hour: 10, minute: 0 },
-  { hour: 15, minute: 0 },
-  { hour: 20, minute: 0 },
-];
-
 function pickRandomReminderMessage(): string {
   return EXPENSE_REMINDER_MESSAGES[Math.floor(Math.random() * EXPENSE_REMINDER_MESSAGES.length)];
 }
 
-export async function scheduleDailyExpenseReminders(): Promise<void> {
+export type ReminderFrequency = 'daily' | 'weekly' | 'monthly';
+
+function nextMonthlyDate(hour: number, minute: number): Date {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0, 0);
+  if (next.getTime() <= now.getTime()) {
+    next.setMonth(next.getMonth() + 1);
+  }
+  return next;
+}
+
+export async function scheduleExpenseReminder(
+  time: { hour: number; minute: number },
+  frequency: ReminderFrequency
+): Promise<void> {
   if (isExpoGo) return;
   const granted = await requestNotificationPermission();
   if (!granted) return;
 
   const Notifications = await getNotifications();
-  await Promise.all(
-    DAILY_REMINDER_TIMES.map(({ hour, minute }, index) => {
-      const identifier = `${DAILY_EXPENSE_REMINDER_ID_PREFIX}${index}`;
-      return Notifications.cancelScheduledNotificationAsync(identifier)
-        .catch(() => {})
-        .then(() =>
-          Notifications.scheduleNotificationAsync({
-            identifier,
-            content: {
-              title: 'Expense Tracker',
-              body: pickRandomReminderMessage(),
-            },
-            trigger: {
-              type: Notifications.SchedulableTriggerInputTypes.DAILY,
-              hour,
-              minute,
-            },
-          })
-        );
-    })
-  );
+  await Notifications.cancelScheduledNotificationAsync(EXPENSE_REMINDER_ID).catch(() => {});
+
+  const content = {
+    title: 'Expense Tracker',
+    body: pickRandomReminderMessage(),
+  };
+
+  if (frequency === 'daily') {
+    await Notifications.scheduleNotificationAsync({
+      identifier: EXPENSE_REMINDER_ID,
+      content,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: time.hour,
+        minute: time.minute,
+      },
+    });
+  } else if (frequency === 'weekly') {
+    const weekday = new Date().getDay() + 1; // expo-notifications uses 1 (Sunday) - 7 (Saturday)
+    await Notifications.scheduleNotificationAsync({
+      identifier: EXPENSE_REMINDER_ID,
+      content,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+        weekday,
+        hour: time.hour,
+        minute: time.minute,
+      },
+    });
+  } else {
+    // No native monthly trigger; schedule the next one-shot date and let
+    // syncExpenseReminder() re-derive/reschedule it on every app bootstrap.
+    await Notifications.scheduleNotificationAsync({
+      identifier: EXPENSE_REMINDER_ID,
+      content,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: nextMonthlyDate(time.hour, time.minute),
+      },
+    });
+  }
 }
 
-export async function cancelDailyExpenseReminders(): Promise<void> {
+export async function cancelExpenseReminder(): Promise<void> {
   if (isExpoGo) return;
   const Notifications = await getNotifications();
-  await Promise.all(
-    DAILY_REMINDER_TIMES.map((_, index) =>
-      Notifications.cancelScheduledNotificationAsync(`${DAILY_EXPENSE_REMINDER_ID_PREFIX}${index}`).catch(() => {})
-    )
-  );
+  await Notifications.cancelScheduledNotificationAsync(EXPENSE_REMINDER_ID).catch(() => {});
 }
 
-export async function syncDailyExpenseReminder(enabled: boolean): Promise<void> {
+export async function syncExpenseReminder(settings: {
+  notificationsEnabled: boolean;
+  expenseReminderEnabled: boolean;
+  expenseReminderTime: string;
+  expenseReminderFrequency: ReminderFrequency;
+}): Promise<void> {
   if (isExpoGo) return;
-  if (enabled) {
-    await scheduleDailyExpenseReminders();
+  if (settings.notificationsEnabled && settings.expenseReminderEnabled) {
+    const [hour, minute] = settings.expenseReminderTime.split(':').map(Number);
+    await scheduleExpenseReminder({ hour, minute }, settings.expenseReminderFrequency);
   } else {
-    await cancelDailyExpenseReminders();
+    await cancelExpenseReminder();
   }
+}
+
+export async function scheduleLoanReminder(
+  loanId: string,
+  personName: string,
+  amount: string,
+  dueDate: Date
+): Promise<string | null> {
+  if (isExpoGo) return null;
+  const granted = await requestNotificationPermission();
+  if (!granted) return null;
+
+  const trigger = new Date(dueDate);
+  trigger.setHours(9, 0, 0, 0);
+  if (trigger.getTime() <= Date.now()) return null;
+
+  const Notifications = await getNotifications();
+  const identifier = `loan-${loanId}`;
+  await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => {});
+  return Notifications.scheduleNotificationAsync({
+    identifier,
+    content: {
+      title: 'Repayment due',
+      body: `${personName}'s ${amount} repayment is due ${dueDate.toDateString()}.`,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: trigger,
+    },
+  });
+}
+
+export async function cancelLoanReminder(loanId: string): Promise<void> {
+  if (isExpoGo) return;
+  const Notifications = await getNotifications();
+  await Notifications.cancelScheduledNotificationAsync(`loan-${loanId}`).catch(() => {});
 }
 
 export async function cancelNotification(identifier: string): Promise<void> {

@@ -1,4 +1,4 @@
-import type { Account, Budget, Goal, Transaction } from '../types';
+import type { Account, Budget, Goal, Loan, LoanRepayment, LoanStatus, Transaction } from '../types';
 import { daysBetween, isSameDay, isSameWeek, monthKey, todayISO } from '../utils/date';
 
 export function getTotalBalance(accounts: Account[]): number {
@@ -32,6 +32,43 @@ export function getTotalExpenses(transactions: Transaction[]): number {
 
 export function getNetCashFlow(transactions: Transaction[]): number {
   return getTotalIncome(transactions) - getTotalExpenses(transactions);
+}
+
+export function getTotalLent(transactions: Transaction[]): number {
+  return transactions.filter((t) => t.type === 'lent').reduce((sum, t) => sum + t.amount, 0);
+}
+
+export function getTotalRepaid(transactions: Transaction[]): number {
+  return transactions.filter((t) => t.type === 'repayment').reduce((sum, t) => sum + t.amount, 0);
+}
+
+export function getLoanOutstanding(loan: Loan, repayments: LoanRepayment[]): number {
+  const paid = repayments
+    .filter((r) => r.loanId === loan.id)
+    .reduce((sum, r) => sum + r.amount, 0);
+  return loan.originalAmount - paid;
+}
+
+export function getLoanStatus(loan: Loan, repayments: LoanRepayment[]): LoanStatus {
+  const outstanding = getLoanOutstanding(loan, repayments);
+  if (outstanding <= 0) return 'repaid';
+  const paid = loan.originalAmount - outstanding;
+  return paid > 0 ? 'partial' : 'outstanding';
+}
+
+export interface LoanSummary {
+  totalLent: number;
+  outstanding: number;
+  recovered: number;
+  peopleOwing: number;
+}
+
+export function getLoanSummary(loans: Loan[], repayments: LoanRepayment[]): LoanSummary {
+  const totalLent = loans.reduce((sum, l) => sum + l.originalAmount, 0);
+  const outstanding = loans.reduce((sum, l) => sum + Math.max(getLoanOutstanding(l, repayments), 0), 0);
+  const recovered = totalLent - outstanding;
+  const peopleOwing = loans.filter((l) => getLoanOutstanding(l, repayments) > 0).length;
+  return { totalLent, outstanding, recovered, peopleOwing };
 }
 
 export interface CategoryTotal {
@@ -136,6 +173,69 @@ export function getRecurringExpensesTotal(
         r.frequency === 'daily' ? 30 : r.frequency === 'weekly' ? 4.33 : r.frequency === 'yearly' ? 1 / 12 : 1;
       return sum + r.amount * monthlyFactor;
     }, 0);
+}
+
+export interface MonthlyStatement {
+  openingBalance: number;
+  income: number;
+  expenses: number;
+  lent: number;
+  repaid: number;
+  closingBalance: number;
+}
+
+function netTransactionEffect(transactions: Transaction[]): number {
+  return transactions.reduce((sum, t) => {
+    if (t.type === 'income' || t.type === 'repayment') return sum + t.amount;
+    if (t.type === 'expense' || t.type === 'lent') return sum - t.amount;
+    return sum; // transfers net to zero across all accounts combined
+  }, 0);
+}
+
+export function getMonthlyStatement(
+  transactions: Transaction[],
+  accounts: Account[],
+  monthDate: Date
+): MonthlyStatement {
+  const key = monthKey(monthDate);
+  const monthStart = `${key}-01`;
+  const priorTransactions = transactions.filter((t) => t.date < monthStart);
+  const monthTransactions = transactions.filter((t) => t.date.slice(0, 7) === key);
+
+  const startingBalance = accounts.filter((a) => a.isActive).reduce((sum, a) => sum + a.initialBalance, 0);
+  const openingBalance = startingBalance + netTransactionEffect(priorTransactions);
+
+  const income = getTotalIncome(monthTransactions);
+  const expenses = getTotalExpenses(monthTransactions);
+  const lent = getTotalLent(monthTransactions);
+  const repaid = getTotalRepaid(monthTransactions);
+  const closingBalance = openingBalance + income - expenses - lent + repaid;
+
+  return { openingBalance, income, expenses, lent, repaid, closingBalance };
+}
+
+export interface MoneyWentSummary {
+  income: number;
+  spent: number;
+  lent: number;
+  remaining: number;
+  recurringTotal: number;
+}
+
+export function getMoneyWentSummary(
+  monthTransactions: Transaction[],
+  recurring: { type: 'expense' | 'income'; amount: number; frequency: string; isActive: boolean }[]
+): MoneyWentSummary {
+  const income = getTotalIncome(monthTransactions);
+  const spent = getTotalExpenses(monthTransactions);
+  const lent = getTotalLent(monthTransactions);
+  return {
+    income,
+    spent,
+    lent,
+    remaining: income - spent - lent,
+    recurringTotal: getRecurringExpensesTotal(recurring),
+  };
 }
 
 export function getNetWorth(accounts: Account[]): number {
