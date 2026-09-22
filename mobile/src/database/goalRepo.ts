@@ -11,6 +11,7 @@ interface GoalRow {
   icon: string;
   color: string;
   created_at: string;
+  updated_at: string;
 }
 
 function mapRow(row: GoalRow): Goal {
@@ -23,6 +24,7 @@ function mapRow(row: GoalRow): Goal {
     icon: row.icon,
     color: row.color,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -48,8 +50,8 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
   const id = generateId();
   const now = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO goals (id, name, target_amount, current_amount, target_date, icon, color, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO goals (id, name, target_amount, current_amount, target_date, icon, color, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.name,
     input.targetAmount,
@@ -57,6 +59,7 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
     input.targetDate ?? null,
     input.icon,
     input.color,
+    now,
     now
   );
   return {
@@ -68,14 +71,16 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
     icon: input.icon,
     color: input.color,
     createdAt: now,
+    updatedAt: now,
   };
 }
 
 export async function contributeToGoal(id: string, amount: number): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    'UPDATE goals SET current_amount = current_amount + ? WHERE id = ?',
+    'UPDATE goals SET current_amount = current_amount + ?, updated_at = ? WHERE id = ?',
     amount,
+    new Date().toISOString(),
     id
   );
 }

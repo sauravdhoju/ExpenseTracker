@@ -113,6 +113,7 @@ export interface Goal {
   icon: string;
   color: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export type LoanStatus = 'outstanding' | 'partial' | 'repaid';

@@ -33,7 +33,7 @@ export default function NewTransactionScreen() {
   const colors = useThemeColors();
   const router = useRouter();
 
-  const params = useLocalSearchParams<{ type?: string; categoryId?: string }>();
+  const params = useLocalSearchParams<{ type?: string; categoryId?: string; date?: string }>();
   const initialType = (params.type as ManualTransactionType) ?? 'expense';
 
   const accounts = useAppStore((s) => s.accounts);
@@ -50,7 +50,7 @@ export default function NewTransactionScreen() {
   const [toAccountId, setToAccountId] = useState<string | null>(accounts[1]?.id ?? accounts[0]?.id ?? null);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(params.date ?? todayISO());
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
   const [isSaving, setIsSaving] = useState(false);

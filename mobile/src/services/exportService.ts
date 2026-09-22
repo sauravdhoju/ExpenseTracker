@@ -218,9 +218,10 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
 
   for (const g of backup.goals) {
     await db.runAsync(
-      `INSERT INTO goals (id, name, target_amount, current_amount, target_date, icon, color, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      g.id, g.name, g.targetAmount, g.currentAmount, g.targetDate, g.icon, g.color, g.createdAt
+      `INSERT INTO goals (id, name, target_amount, current_amount, target_date, icon, color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      g.id, g.name, g.targetAmount, g.currentAmount, g.targetDate, g.icon, g.color, g.createdAt,
+      g.updatedAt ?? g.createdAt
     );
   }
 }

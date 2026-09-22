@@ -162,6 +162,9 @@ async function runMigrations(): Promise<void> {
   await addColumnIfMissing(db, 'transactions', 'time', "time TEXT NOT NULL DEFAULT '00:00'");
   await addColumnIfMissing(db, 'transactions', 'loan_id', 'loan_id TEXT REFERENCES loans(id) ON DELETE SET NULL');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_loan ON transactions(loan_id);');
+
+  await addColumnIfMissing(db, 'goals', 'updated_at', "updated_at TEXT NOT NULL DEFAULT ''");
+  await db.execAsync("UPDATE goals SET updated_at = created_at WHERE updated_at = '';");
 }
 
 export async function resetDatabase(): Promise<void> {

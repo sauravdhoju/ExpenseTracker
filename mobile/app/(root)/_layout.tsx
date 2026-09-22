@@ -15,6 +15,7 @@ export default function RootGroupLayout() {
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="more" />
+        <Stack.Screen name="search" options={{ presentation: 'modal' }} />
         <Stack.Screen name="transaction/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="transaction/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="accounts/index" />

@@ -1,5 +1,5 @@
 import type { Account, Budget, Goal, Loan, LoanRepayment, LoanStatus, Transaction } from '../types';
-import { daysBetween, isSameDay, isSameWeek, monthKey, todayISO } from '../utils/date';
+import { daysBetween, isSameDay, isSameWeek, monthKey, startOfWeek, toISODate, todayISO } from '../utils/date';
 
 export function getTotalBalance(accounts: Account[]): number {
   return accounts.filter((a) => a.isActive).reduce((sum, a) => sum + a.balance, 0);
@@ -327,4 +327,206 @@ export function getBudgetEngineSummary(
     remainingToday: dailyAllowance - spentToday,
     spentThisWeek,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Report periods: arbitrary Week/Month/Quarter/Year/Custom ranges, their
+// equivalent "previous period" (for auto-comparison), and sub-range buckets
+// for trend charts.
+// ---------------------------------------------------------------------------
+
+export type ReportPeriod = 'week' | 'month' | 'quarter' | 'year' | 'custom';
+
+export interface DateRange {
+  start: string; // ISO, inclusive
+  end: string; // ISO, inclusive
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+function startOfQuarter(date: Date): Date {
+  return new Date(date.getFullYear(), Math.floor(date.getMonth() / 3) * 3, 1);
+}
+function endOfQuarter(date: Date): Date {
+  return new Date(date.getFullYear(), Math.floor(date.getMonth() / 3) * 3 + 3, 0);
+}
+function startOfYear(date: Date): Date {
+  return new Date(date.getFullYear(), 0, 1);
+}
+function endOfYear(date: Date): Date {
+  return new Date(date.getFullYear(), 11, 31);
+}
+
+export function getPeriodRange(period: ReportPeriod, referenceDate: Date, custom?: DateRange): DateRange {
+  if (period === 'custom') return custom ?? getPeriodRange('month', referenceDate);
+  if (period === 'week') {
+    const start = startOfWeek(referenceDate);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return { start: toISODate(start), end: toISODate(end) };
+  }
+  if (period === 'quarter') {
+    return { start: toISODate(startOfQuarter(referenceDate)), end: toISODate(endOfQuarter(referenceDate)) };
+  }
+  if (period === 'year') {
+    return { start: toISODate(startOfYear(referenceDate)), end: toISODate(endOfYear(referenceDate)) };
+  }
+  return { start: toISODate(startOfMonth(referenceDate)), end: toISODate(endOfMonth(referenceDate)) };
+}
+
+/** The equivalent immediately-preceding period, used to drive auto-comparison deltas. */
+export function getPreviousPeriodRange(period: ReportPeriod, range: DateRange): DateRange {
+  const start = new Date(range.start + 'T00:00:00');
+  if (period === 'month') return getPeriodRange('month', new Date(start.getFullYear(), start.getMonth() - 1, 1));
+  if (period === 'quarter') return getPeriodRange('quarter', new Date(start.getFullYear(), start.getMonth() - 3, 1));
+  if (period === 'year') return getPeriodRange('year', new Date(start.getFullYear() - 1, start.getMonth(), 1));
+
+  // week / custom: shift back by the range's exact day-length
+  const end = new Date(range.end + 'T00:00:00');
+  const lengthDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  const prevEnd = new Date(start);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+  const prevStart = new Date(prevEnd);
+  prevStart.setDate(prevStart.getDate() - (lengthDays - 1));
+  return { start: toISODate(prevStart), end: toISODate(prevEnd) };
+}
+
+export function getSameRangeLastYear(range: DateRange): DateRange {
+  const shift = (iso: string) => {
+    const d = new Date(iso + 'T00:00:00');
+    d.setFullYear(d.getFullYear() - 1);
+    return toISODate(d);
+  };
+  return { start: shift(range.start), end: shift(range.end) };
+}
+
+export function filterByRange(transactions: Transaction[], range: DateRange): Transaction[] {
+  return transactions.filter((t) => t.date >= range.start && t.date <= range.end);
+}
+
+/** Sub-ranges for trend charts: daily for a week, weekly for a month, monthly for a quarter/year. */
+export function getPeriodBuckets(period: ReportPeriod, range: DateRange): DateRange[] {
+  const start = new Date(range.start + 'T00:00:00');
+  const end = new Date(range.end + 'T00:00:00');
+  if (end < start) return [];
+
+  if (period === 'week') {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      if (d > end) return null;
+      const iso = toISODate(d);
+      return { start: iso, end: iso };
+    }).filter((b): b is DateRange => b !== null);
+  }
+
+  if (period === 'quarter' || period === 'year') {
+    const buckets: DateRange[] = [];
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cursor <= end) {
+      const bucketEnd = endOfMonth(cursor);
+      buckets.push({
+        start: toISODate(cursor > start ? cursor : start),
+        end: toISODate(bucketEnd < end ? bucketEnd : end),
+      });
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    }
+    return buckets;
+  }
+
+  // month / custom: weekly buckets clipped to the range
+  const buckets: DateRange[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const bucketEnd = new Date(cursor);
+    bucketEnd.setDate(bucketEnd.getDate() + 6);
+    buckets.push({
+      start: toISODate(cursor),
+      end: toISODate(bucketEnd > end ? end : bucketEnd),
+    });
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return buckets;
+}
+
+// ---------------------------------------------------------------------------
+// Forgotten Money: overdue/stale loans, and goals/accounts that haven't been
+// touched in a while.
+// ---------------------------------------------------------------------------
+
+const STALE_LOAN_DAYS = 60;
+const IDLE_GOAL_DAYS = 30;
+const IDLE_ACCOUNT_DAYS = 60;
+
+export interface ForgottenLoan {
+  loan: Loan;
+  outstanding: number;
+  reason: 'overdue' | 'stale';
+  daysSince: number;
+}
+
+export function getForgottenLoans(
+  loans: Loan[],
+  repayments: LoanRepayment[],
+  today: string = todayISO()
+): ForgottenLoan[] {
+  const result: ForgottenLoan[] = [];
+  for (const loan of loans) {
+    if (getLoanStatus(loan, repayments) === 'repaid') continue;
+    const outstanding = getLoanOutstanding(loan, repayments);
+    if (loan.expectedReturnDate && loan.expectedReturnDate < today) {
+      result.push({ loan, outstanding, reason: 'overdue', daysSince: daysBetween(loan.expectedReturnDate, today) });
+    } else if (!loan.expectedReturnDate && daysBetween(loan.lentDate, today) > STALE_LOAN_DAYS) {
+      result.push({ loan, outstanding, reason: 'stale', daysSince: daysBetween(loan.lentDate, today) });
+    }
+  }
+  return result.sort((a, b) => b.daysSince - a.daysSince);
+}
+
+export interface IdleGoal {
+  goal: Goal;
+  daysSinceUpdate: number;
+}
+
+export function getIdleGoals(
+  goals: Goal[],
+  today: string = todayISO(),
+  thresholdDays: number = IDLE_GOAL_DAYS
+): IdleGoal[] {
+  return goals
+    .filter((g) => g.currentAmount < g.targetAmount)
+    .map((g) => ({ goal: g, daysSinceUpdate: daysBetween(g.updatedAt.slice(0, 10), today) }))
+    .filter((g) => g.daysSinceUpdate >= thresholdDays)
+    .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate);
+}
+
+export interface IdleAccount {
+  account: Account;
+  daysSinceActivity: number | null;
+}
+
+export function getIdleAccounts(
+  accounts: Account[],
+  transactions: Transaction[],
+  today: string = todayISO(),
+  thresholdDays: number = IDLE_ACCOUNT_DAYS
+): IdleAccount[] {
+  const result: IdleAccount[] = [];
+  for (const account of accounts) {
+    if (!account.isActive || account.balance === 0) continue;
+    const relevant = transactions.filter((t) => t.accountId === account.id || t.toAccountId === account.id);
+    if (relevant.length === 0) {
+      const daysSinceCreated = daysBetween(account.createdAt.slice(0, 10), today);
+      if (daysSinceCreated >= thresholdDays) result.push({ account, daysSinceActivity: null });
+      continue;
+    }
+    const lastDate = relevant.reduce((max, t) => (t.date > max ? t.date : max), relevant[0].date);
+    const daysSince = daysBetween(lastDate, today);
+    if (daysSince >= thresholdDays) result.push({ account, daysSinceActivity: daysSince });
+  }
+  return result.sort((a, b) => (b.daysSinceActivity ?? Infinity) - (a.daysSinceActivity ?? Infinity));
 }

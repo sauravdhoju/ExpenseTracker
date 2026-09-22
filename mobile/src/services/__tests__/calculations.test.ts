@@ -20,6 +20,13 @@ import {
   getLoanSummary,
   getMonthlyStatement,
   getMoneyWentSummary,
+  getPeriodRange,
+  getPreviousPeriodRange,
+  getSameRangeLastYear,
+  getPeriodBuckets,
+  getForgottenLoans,
+  getIdleGoals,
+  getIdleAccounts,
 } from '../calculations';
 import type { Account, Budget, Goal, Loan, LoanRepayment, Transaction } from '../../types';
 
@@ -242,6 +249,7 @@ describe('getGoalProgress', () => {
       icon: 'shield',
       color: '#000',
       createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
     };
     const progress = getGoalProgress(goal);
     expect(progress.percent).toBe(32);
@@ -257,6 +265,7 @@ describe('getGoalProgress', () => {
       currentAmount: 32000,
       targetDate: '2026-12-05',
       icon: 'shield',
+      updatedAt: '2026-09-01T00:00:00.000Z',
       color: '#000',
       createdAt: '2026-09-01T00:00:00.000Z',
     };
@@ -305,6 +314,21 @@ function makeRepayment(overrides: Partial<LoanRepayment>): LoanRepayment {
     accountId: 'acc1',
     note: null,
     createdAt: '2026-09-10T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeGoal(overrides: Partial<Goal>): Goal {
+  return {
+    id: 'goal1',
+    name: 'Emergency Fund',
+    targetAmount: 100000,
+    currentAmount: 32000,
+    targetDate: null,
+    icon: 'shield',
+    color: '#000',
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -390,5 +414,139 @@ describe('getMoneyWentSummary', () => {
     expect(summary.lent).toBe(5000);
     expect(summary.remaining).toBe(12550);
     expect(summary.recurringTotal).toBe(1200);
+  });
+});
+
+describe('getPeriodRange', () => {
+  it('computes calendar month/quarter/year bounds', () => {
+    const ref = new Date('2026-09-15');
+    expect(getPeriodRange('month', ref)).toEqual({ start: '2026-09-01', end: '2026-09-30' });
+    expect(getPeriodRange('quarter', ref)).toEqual({ start: '2026-07-01', end: '2026-09-30' });
+    expect(getPeriodRange('year', ref)).toEqual({ start: '2026-01-01', end: '2026-12-31' });
+  });
+
+  it('computes a Monday-start week range', () => {
+    // 2026-09-15 is a Tuesday
+    expect(getPeriodRange('week', new Date('2026-09-15'))).toEqual({ start: '2026-09-14', end: '2026-09-20' });
+  });
+
+  it('falls back to custom range when provided', () => {
+    const custom = { start: '2026-01-05', end: '2026-01-10' };
+    expect(getPeriodRange('custom', new Date('2026-09-15'), custom)).toEqual(custom);
+  });
+});
+
+describe('getPreviousPeriodRange', () => {
+  it('steps to the previous calendar month/quarter/year', () => {
+    expect(getPreviousPeriodRange('month', { start: '2026-09-01', end: '2026-09-30' })).toEqual({
+      start: '2026-08-01',
+      end: '2026-08-31',
+    });
+    expect(getPreviousPeriodRange('quarter', { start: '2026-07-01', end: '2026-09-30' })).toEqual({
+      start: '2026-04-01',
+      end: '2026-06-30',
+    });
+    expect(getPreviousPeriodRange('year', { start: '2026-01-01', end: '2026-12-31' })).toEqual({
+      start: '2025-01-01',
+      end: '2025-12-31',
+    });
+  });
+
+  it('shifts a week range back by its exact length', () => {
+    expect(getPreviousPeriodRange('week', { start: '2026-09-14', end: '2026-09-20' })).toEqual({
+      start: '2026-09-07',
+      end: '2026-09-13',
+    });
+  });
+});
+
+describe('getSameRangeLastYear', () => {
+  it('shifts both endpoints back one calendar year', () => {
+    expect(getSameRangeLastYear({ start: '2026-09-01', end: '2026-09-30' })).toEqual({
+      start: '2025-09-01',
+      end: '2025-09-30',
+    });
+  });
+});
+
+describe('getPeriodBuckets', () => {
+  it('returns 7 daily buckets for a week', () => {
+    const buckets = getPeriodBuckets('week', { start: '2026-09-14', end: '2026-09-20' });
+    expect(buckets).toHaveLength(7);
+    expect(buckets[0]).toEqual({ start: '2026-09-14', end: '2026-09-14' });
+    expect(buckets[6]).toEqual({ start: '2026-09-20', end: '2026-09-20' });
+  });
+
+  it('returns monthly buckets clipped to range for a year', () => {
+    const buckets = getPeriodBuckets('year', { start: '2026-01-01', end: '2026-12-31' });
+    expect(buckets).toHaveLength(12);
+    expect(buckets[0]).toEqual({ start: '2026-01-01', end: '2026-01-31' });
+    expect(buckets[11]).toEqual({ start: '2026-12-01', end: '2026-12-31' });
+  });
+
+  it('returns weekly buckets clipped to range for a month', () => {
+    const buckets = getPeriodBuckets('month', { start: '2026-09-01', end: '2026-09-30' });
+    expect(buckets[0].start).toBe('2026-09-01');
+    expect(buckets[buckets.length - 1].end).toBe('2026-09-30');
+  });
+});
+
+describe('getForgottenLoans', () => {
+  it('flags loans past their expected return date as overdue', () => {
+    const loan = makeLoan({ expectedReturnDate: '2026-09-01' });
+    const result = getForgottenLoans([loan], [], '2026-09-15');
+    expect(result).toHaveLength(1);
+    expect(result[0].reason).toBe('overdue');
+    expect(result[0].daysSince).toBe(14);
+  });
+
+  it('flags loans with no return date as stale after 60 days', () => {
+    const loan = makeLoan({ expectedReturnDate: null, lentDate: '2026-06-01' });
+    const result = getForgottenLoans([loan], [], '2026-09-15');
+    expect(result[0].reason).toBe('stale');
+  });
+
+  it('excludes fully repaid loans', () => {
+    const loan = makeLoan({ expectedReturnDate: '2026-09-01', originalAmount: 1000 });
+    const repayments = [makeRepayment({ amount: 1000 })];
+    expect(getForgottenLoans([loan], repayments, '2026-09-15')).toHaveLength(0);
+  });
+
+  it('does not flag a loan still within its return window', () => {
+    const loan = makeLoan({ expectedReturnDate: '2026-09-30' });
+    expect(getForgottenLoans([loan], [], '2026-09-15')).toHaveLength(0);
+  });
+});
+
+describe('getIdleGoals', () => {
+  it('flags incomplete goals not touched in 30+ days', () => {
+    const goal = makeGoal({ updatedAt: '2026-08-01T00:00:00.000Z', currentAmount: 5000, targetAmount: 10000 });
+    const result = getIdleGoals([goal], '2026-09-15');
+    expect(result).toHaveLength(1);
+    expect(result[0].daysSinceUpdate).toBe(45);
+  });
+
+  it('excludes completed goals and recently-touched goals', () => {
+    const completed = makeGoal({ updatedAt: '2026-08-01T00:00:00.000Z', currentAmount: 10000, targetAmount: 10000 });
+    const recent = makeGoal({ id: 'g2', updatedAt: '2026-09-10T00:00:00.000Z', currentAmount: 100, targetAmount: 10000 });
+    expect(getIdleGoals([completed, recent], '2026-09-15')).toHaveLength(0);
+  });
+});
+
+describe('getIdleAccounts', () => {
+  it('flags active accounts with a balance and no recent transactions', () => {
+    const account = makeAccount({ id: 'a1', isActive: true, balance: 5000 });
+    const transactions = [makeTransaction({ id: '1', accountId: 'a1', date: '2026-07-01' })];
+    const result = getIdleAccounts([account], transactions, '2026-09-15');
+    expect(result).toHaveLength(1);
+    expect(result[0].daysSinceActivity).toBe(76);
+  });
+
+  it('excludes accounts with recent activity, zero balance, or that are inactive', () => {
+    const active = makeAccount({ id: 'a1', isActive: true, balance: 5000 });
+    const zero = makeAccount({ id: 'a2', isActive: true, balance: 0 });
+    const inactive = makeAccount({ id: 'a3', isActive: false, balance: 5000 });
+    const transactions = [makeTransaction({ id: '1', accountId: 'a1', date: '2026-09-10' })];
+    expect(getIdleAccounts([active, zero, inactive], transactions, '2026-09-15')).toHaveLength(0);
   });
 });

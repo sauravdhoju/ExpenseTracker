@@ -91,6 +91,7 @@ export default function DashboardScreen() {
         title={`${getGreeting()} 👋`}
         subtitle={`${MONTH_NAMES[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`}
         actions={[
+          { icon: 'search-outline', onPress: () => router.push('/search') },
           { icon: 'notifications-outline', onPress: () => router.push('/bills') },
           { icon: 'settings-outline', onPress: () => router.push('/more') },
         ]}
