@@ -210,7 +210,7 @@ export default function MoreScreen() {
           {
             icon: 'lock-closed-outline',
             label: 'PIN & Biometric Lock',
-            future: true,
+            onPress: () => router.push('/settings/security'),
           },
           {
             icon: 'cloud-upload-outline',

@@ -17,6 +17,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   budgetAlertThreshold: 80,
   recurringReminderEnabled: true,
   lentReminderEnabled: true,
+  appLockEnabled: false,
+  biometricLockEnabled: false,
 };
 
 export async function getSetting<K extends keyof AppSettings>(

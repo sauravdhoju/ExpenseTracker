@@ -162,6 +162,8 @@ export interface AppSettings {
   budgetAlertThreshold: number; // percent
   recurringReminderEnabled: boolean;
   lentReminderEnabled: boolean;
+  appLockEnabled: boolean;
+  biometricLockEnabled: boolean;
 }
 
 export interface CategorySpending {

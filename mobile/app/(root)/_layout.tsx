@@ -32,6 +32,7 @@ export default function RootGroupLayout() {
         <Stack.Screen name="shortcuts/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/currency" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/notifications" />
+        <Stack.Screen name="settings/security" />
         <Stack.Screen name="settings/appearance" />
         <Stack.Screen name="settings/data" />
       </Stack>
