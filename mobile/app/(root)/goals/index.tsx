@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
@@ -106,8 +106,11 @@ export default function GoalsScreen() {
       </ScrollView>
 
       <Modal visible={!!contributeId} transparent animationType="fade" onRequestClose={() => setContributeId(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.xl }}>
-          <View style={{ backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.xl }}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.xl }}
+          onPress={() => setContributeId(null)}
+        >
+          <Pressable style={{ backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.xl }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: spacing.lg }}>Add Contribution</Text>
             <TextInput
               value={contributeAmount}
@@ -122,8 +125,8 @@ export default function GoalsScreen() {
               <Button label="Cancel" variant="secondary" style={{ flex: 1 }} onPress={() => setContributeId(null)} />
               <Button label="Add" style={{ flex: 1 }} onPress={handleContribute} />
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );

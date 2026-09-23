@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Modal, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useDateFormat } from '../../hooks/useDateFormat';
@@ -54,8 +54,11 @@ export default function DateField({ value, onChange }: DateFieldProps) {
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: colors.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl }}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
+          onPress={() => setOpen(false)}
+        >
+          <Pressable style={{ backgroundColor: colors.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
               <TouchableOpacity onPress={() => setViewMonth((d) => shiftMonth(d, -1, dateSystem))} hitSlop={8}>
                 <Ionicons name="chevron-back" size={20} color={colors.text} />
@@ -114,8 +117,8 @@ export default function DateField({ value, onChange }: DateFieldProps) {
             <TouchableOpacity onPress={() => selectDay(today)} style={{ alignSelf: 'center', marginTop: spacing.md }}>
               <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Today</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );
