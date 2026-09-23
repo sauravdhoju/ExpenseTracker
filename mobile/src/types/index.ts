@@ -36,7 +36,7 @@ export interface Category {
   createdAt: string;
 }
 
-export type TransactionType = 'expense' | 'income' | 'transfer' | 'lent' | 'repayment';
+export type TransactionType = 'expense' | 'income' | 'transfer' | 'lent' | 'repayment' | 'forgotten';
 
 export interface Transaction {
   id: string;
@@ -44,13 +44,15 @@ export interface Transaction {
   amount: number; // always positive; sign/direction derived from `type`
   accountId: string;
   toAccountId: string | null; // only for transfers
-  categoryId: string | null; // null for transfers, lent, and repayment
+  categoryId: string | null; // null for transfers, lent, repayment, and forgotten
   title: string;
   notes: string | null;
   date: string; // ISO date (YYYY-MM-DD)
   time: string; // HH:mm, captured automatically at insert time
   recurringId: string | null; // set if generated from a recurring transaction
   loanId: string | null; // set if generated from a lent/repayment action
+  forgottenId: string | null; // set if generated from a forgotten-money entry/resolution
+  affectsBalance: boolean; // false for a forgotten-money resolution (the balance effect already happened)
   createdAt: string;
   updatedAt: string;
 }
@@ -142,9 +144,32 @@ export interface LoanRepayment {
   createdAt: string;
 }
 
+export type ForgottenStatus = 'unresolved' | 'partial' | 'resolved';
+
+export interface ForgottenEntry {
+  id: string;
+  amount: number;
+  date: string; // the original date the user believes the money was spent
+  accountId: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyTracking {
+  id: string;
+  date: string; // ISO, unique
+  completed: boolean;
+  isGraceDay: boolean;
+  completedAt: string;
+  createdAt: string;
+}
+
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 export type ReminderFrequency = 'daily' | 'weekly' | 'monthly';
+
+export type DateSystem = 'AD' | 'BS';
 
 export interface AppSettings {
   currency: CurrencyCode;
@@ -164,6 +189,8 @@ export interface AppSettings {
   lentReminderEnabled: boolean;
   appLockEnabled: boolean;
   biometricLockEnabled: boolean;
+  dateSystem: DateSystem;
+  graceDayEnabled: boolean;
 }
 
 export interface CategorySpending {

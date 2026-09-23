@@ -7,6 +7,7 @@ import PageLoader from '../src/components/ui/PageLoader';
 import AppLockScreen from '../src/components/AppLockScreen';
 import { useAppStore } from '../src/store/useAppStore';
 import { syncExpenseReminder } from '../src/services/notificationService';
+import { getCurrentStreak, trackedDatesSet } from '../src/services/calculations';
 
 function RootLayoutContent() {
   const isReady = useAppStore((s) => s.isReady);
@@ -16,6 +17,7 @@ function RootLayoutContent() {
   const expenseReminderTime = useAppStore((s) => s.settings.expenseReminderTime);
   const expenseReminderFrequency = useAppStore((s) => s.settings.expenseReminderFrequency);
   const appLockEnabled = useAppStore((s) => s.settings.appLockEnabled);
+  const dailyTracking = useAppStore((s) => s.dailyTracking);
   const bootstrap = useAppStore((s) => s.bootstrap);
   const pathname = usePathname();
 
@@ -34,13 +36,24 @@ function RootLayoutContent() {
 
   useEffect(() => {
     if (!isReady) return;
-    syncExpenseReminder({
-      notificationsEnabled,
-      expenseReminderEnabled,
-      expenseReminderTime,
-      expenseReminderFrequency,
-    });
-  }, [isReady, notificationsEnabled, expenseReminderEnabled, expenseReminderTime, expenseReminderFrequency]);
+    const currentStreak = getCurrentStreak(trackedDatesSet(dailyTracking));
+    syncExpenseReminder(
+      {
+        notificationsEnabled,
+        expenseReminderEnabled,
+        expenseReminderTime,
+        expenseReminderFrequency,
+      },
+      currentStreak
+    );
+  }, [
+    isReady,
+    notificationsEnabled,
+    expenseReminderEnabled,
+    expenseReminderTime,
+    expenseReminderFrequency,
+    dailyTracking,
+  ]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {

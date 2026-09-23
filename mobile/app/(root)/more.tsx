@@ -173,6 +173,16 @@ export default function MoreScreen() {
             label: 'Lent Money',
             onPress: () => router.push('/loans'),
           },
+          {
+            icon: 'help-circle-outline',
+            label: 'Forgotten Money',
+            onPress: () => router.push('/forgotten'),
+          },
+          {
+            icon: 'flame-outline',
+            label: 'Streaks',
+            onPress: () => router.push('/streaks'),
+          },
         ]}
       />
 

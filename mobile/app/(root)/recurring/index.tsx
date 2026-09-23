@@ -3,8 +3,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
-import { formatFriendlyDate } from '../../../src/utils/date';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import EmptyState from '../../../src/components/ui/EmptyState';
@@ -13,6 +13,7 @@ import IconCircle from '../../../src/components/ui/IconCircle';
 export default function RecurringScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { format: formatDate } = useDateFormat();
   const router = useRouter();
   const recurring = useAppStore((s) => s.recurring);
   const categories = useAppStore((s) => s.categories);
@@ -60,7 +61,7 @@ export default function RecurringScreen() {
                   <View style={{ flex: 1, marginLeft: spacing.md }}>
                     <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>{r.title}</Text>
                     <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2, textTransform: 'capitalize' }}>
-                      {r.frequency} · Next {formatFriendlyDate(r.nextOccurrence)}
+                      {r.frequency} · Next {formatDate(r.nextOccurrence)}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>

@@ -8,13 +8,17 @@ import { useAppStore } from '../../../src/store/useAppStore';
 import {
   filterByMonth,
   getCategorySpending,
+  getCurrentStreak,
   getDailyAverage,
+  getForgottenSummary,
   getLoanSummary,
+  getLongestStreak,
   getMoneyWentSummary,
   getMonthlyComparison,
   getTotalBalance,
   getTotalExpenses,
   getTotalIncome,
+  trackedDatesSet,
 } from '../../../src/services/calculations';
 import { generateInsights } from '../../../src/services/insightService';
 import { addMonths, MONTH_NAMES } from '../../../src/utils/date';
@@ -52,6 +56,8 @@ export default function DashboardScreen() {
   const recurring = useAppStore((s) => s.recurring);
   const loans = useAppStore((s) => s.loans);
   const repayments = useAppStore((s) => s.repayments);
+  const forgottenEntries = useAppStore((s) => s.forgottenEntries);
+  const dailyTracking = useAppStore((s) => s.dailyTracking);
   const removeTransaction = useAppStore((s) => s.removeTransaction);
 
   const [activeShortcut, setActiveShortcut] = useState<Shortcut | null>(null);
@@ -81,6 +87,13 @@ export default function DashboardScreen() {
   const moneyWent = useMemo(() => getMoneyWentSummary(monthTransactions, recurring), [monthTransactions, recurring]);
   const categoryBreakdown = useMemo(() => getCategorySpending(monthTransactions).slice(0, 5), [monthTransactions]);
   const loanSummary = useMemo(() => getLoanSummary(loans, repayments), [loans, repayments]);
+  const forgottenSummary = useMemo(
+    () => getForgottenSummary(forgottenEntries, transactions),
+    [forgottenEntries, transactions]
+  );
+  const tracked = useMemo(() => trackedDatesSet(dailyTracking), [dailyTracking]);
+  const currentStreak = useMemo(() => getCurrentStreak(tracked), [tracked]);
+  const longestStreak = useMemo(() => getLongestStreak(tracked), [tracked]);
 
   return (
     <ScrollView
@@ -222,6 +235,42 @@ export default function DashboardScreen() {
             <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2 }}>
               {loanSummary.peopleOwing} {loanSummary.peopleOwing === 1 ? 'person' : 'people'} ·{' '}
               {format(loanSummary.outstanding)} outstanding
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+        </Card>
+      </TouchableOpacity>
+
+      {/* Forgotten money nudge */}
+      {forgottenSummary.unresolvedCount > 0 && (
+        <TouchableOpacity onPress={() => router.push('/forgotten')}>
+          <Card style={{ marginBottom: spacing.lg, flexDirection: 'row', alignItems: 'center' }}>
+            <IconCircle name="help-circle-outline" color={colors.warning} size={44} />
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>Forgotten Money</Text>
+              <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2 }}>
+                {forgottenSummary.unresolvedCount} {forgottenSummary.unresolvedCount === 1 ? 'entry' : 'entries'} ·{' '}
+                {format(forgottenSummary.outstanding)} unexplained
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+          </Card>
+        </TouchableOpacity>
+      )}
+
+      {/* Streak */}
+      <TouchableOpacity onPress={() => router.push('/streaks')}>
+        <Card style={{ marginBottom: spacing.lg, flexDirection: 'row', alignItems: 'center' }}>
+          <IconCircle name="flame-outline" color={colors.primary} size={44} />
+          <View style={{ flex: 1, marginLeft: spacing.md }}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>
+              🔥 {currentStreak} Day Streak
+            </Text>
+            <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2 }}>
+              {currentStreak > 0
+                ? `You've tracked your money for ${currentStreak} day${currentStreak === 1 ? '' : 's'} in a row.`
+                : 'Track today to start a new streak.'}
+              {'  ·  '}Best: {longestStreak} {longestStreak === 1 ? 'day' : 'days'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textLight} />

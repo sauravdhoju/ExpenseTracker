@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lentReminderEnabled: true,
   appLockEnabled: false,
   biometricLockEnabled: false,
+  dateSystem: 'AD',
+  graceDayEnabled: true,
 };
 
 export async function getSetting<K extends keyof AppSettings>(

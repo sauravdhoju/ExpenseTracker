@@ -29,6 +29,7 @@ export default function RootGroupLayout() {
         <Stack.Screen name="bills/index" />
         <Stack.Screen name="bills/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="shortcuts/new" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="forgotten/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="shortcuts/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/currency" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/notifications" />

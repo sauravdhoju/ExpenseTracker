@@ -92,7 +92,10 @@ const EXPENSE_REMINDER_MESSAGES = [
   'Keep your streak going — add today\'s expenses before bed!',
 ];
 
-function pickRandomReminderMessage(): string {
+function pickRandomReminderMessage(currentStreak: number): string {
+  if (currentStreak > 0) {
+    return `🔥 Don't forget your money check. Keep your ${currentStreak}-day streak going.`;
+  }
   return EXPENSE_REMINDER_MESSAGES[Math.floor(Math.random() * EXPENSE_REMINDER_MESSAGES.length)];
 }
 
@@ -109,7 +112,8 @@ function nextMonthlyDate(hour: number, minute: number): Date {
 
 export async function scheduleExpenseReminder(
   time: { hour: number; minute: number },
-  frequency: ReminderFrequency
+  frequency: ReminderFrequency,
+  currentStreak = 0
 ): Promise<void> {
   if (isExpoGo) return;
   const granted = await requestNotificationPermission();
@@ -120,7 +124,7 @@ export async function scheduleExpenseReminder(
 
   const content = {
     title: 'Expense Tracker',
-    body: pickRandomReminderMessage(),
+    body: pickRandomReminderMessage(currentStreak),
   };
 
   if (frequency === 'daily') {
@@ -165,16 +169,19 @@ export async function cancelExpenseReminder(): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(EXPENSE_REMINDER_ID).catch(() => {});
 }
 
-export async function syncExpenseReminder(settings: {
-  notificationsEnabled: boolean;
-  expenseReminderEnabled: boolean;
-  expenseReminderTime: string;
-  expenseReminderFrequency: ReminderFrequency;
-}): Promise<void> {
+export async function syncExpenseReminder(
+  settings: {
+    notificationsEnabled: boolean;
+    expenseReminderEnabled: boolean;
+    expenseReminderTime: string;
+    expenseReminderFrequency: ReminderFrequency;
+  },
+  currentStreak = 0
+): Promise<void> {
   if (isExpoGo) return;
   if (settings.notificationsEnabled && settings.expenseReminderEnabled) {
     const [hour, minute] = settings.expenseReminderTime.split(':').map(Number);
-    await scheduleExpenseReminder({ hour, minute }, settings.expenseReminderFrequency);
+    await scheduleExpenseReminder({ hour, minute }, settings.expenseReminderFrequency, currentStreak);
   } else {
     await cancelExpenseReminder();
   }

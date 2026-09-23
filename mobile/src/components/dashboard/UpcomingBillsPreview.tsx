@@ -2,9 +2,10 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useCurrency } from '../../hooks/useCurrency';
+import { useDateFormat } from '../../hooks/useDateFormat';
 import { useAppStore } from '../../store/useAppStore';
 import { getUpcomingBills } from '../../services/calculations';
-import { daysBetween, formatFriendlyDate, todayISO } from '../../utils/date';
+import { daysBetween, todayISO } from '../../utils/date';
 import { spacing } from '../../constants/theme';
 import Card from '../ui/Card';
 import IconCircle from '../ui/IconCircle';
@@ -12,6 +13,7 @@ import IconCircle from '../ui/IconCircle';
 export default function UpcomingBillsPreview() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { format: formatDate } = useDateFormat();
   const router = useRouter();
   const bills = useAppStore((s) => s.bills);
 
@@ -36,7 +38,7 @@ export default function UpcomingBillsPreview() {
             <View style={{ flex: 1, marginLeft: spacing.md }}>
               <Text style={{ fontSize: 14, fontWeight: '500', color: colors.text }}>{bill.title}</Text>
               <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
-                Due {formatFriendlyDate(bill.dueDate)} {days === 0 ? '· Today' : days === 1 ? '· Tomorrow' : `· ${days} days`}
+                Due {formatDate(bill.dueDate)} {days === 0 ? '· Today' : days === 1 ? '· Tomorrow' : `· ${days} days`}
               </Text>
             </View>
             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{format(bill.amount)}</Text>

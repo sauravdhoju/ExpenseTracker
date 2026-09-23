@@ -1,8 +1,9 @@
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { useDateFormat } from '../../hooks/useDateFormat';
 import { spacing, radius } from '../../constants/theme';
-import { formatFriendlyDate, toISODate } from '../../utils/date';
+import { toISODate } from '../../utils/date';
 
 interface DateFieldProps {
   value: string; // ISO date
@@ -11,6 +12,7 @@ interface DateFieldProps {
 
 export default function DateField({ value, onChange }: DateFieldProps) {
   const colors = useThemeColors();
+  const { format } = useDateFormat();
 
   const shift = (days: number) => {
     const d = new Date(value + 'T00:00:00');
@@ -33,7 +35,7 @@ export default function DateField({ value, onChange }: DateFieldProps) {
         <Ionicons name="chevron-back" size={18} color={colors.text} />
       </TouchableOpacity>
       <Text style={{ fontSize: 15, fontWeight: '500', color: colors.text }}>
-        {formatFriendlyDate(value)}
+        {format(value)}
       </Text>
       <TouchableOpacity onPress={() => shift(1)} hitSlop={8} style={{ padding: spacing.sm }}>
         <Ionicons name="chevron-forward" size={18} color={colors.text} />

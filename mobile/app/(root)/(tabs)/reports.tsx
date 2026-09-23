@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
 import {
   filterByRange,
@@ -23,7 +24,9 @@ import {
   type DateRange,
   type ReportPeriod,
 } from '../../../src/services/calculations';
-import { addMonths, formatFriendlyDate, MONTH_NAMES, todayISO } from '../../../src/utils/date';
+import { addMonths, MONTH_NAMES, todayISO } from '../../../src/utils/date';
+import { formatBsDate, formatBsMonthYear, getMonthGrid, shiftMonth, type MonthGridCell } from '../../../src/utils/bsDate';
+import type { DateSystem } from '../../../src/types';
 import { spacing, radius } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import PageHeader from '../../../src/components/ui/PageHeader';
@@ -44,12 +47,19 @@ const PERIODS: { value: ReportPeriod; label: string }[] = [
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function formatRangeLabel(period: ReportPeriod, range: DateRange): string {
+function formatRangeLabel(period: ReportPeriod, range: DateRange, dateSystem: DateSystem): string {
   const start = new Date(range.start + 'T00:00:00');
   const end = new Date(range.end + 'T00:00:00');
   if (period === 'year') return String(start.getFullYear());
   if (period === 'quarter') return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
-  if (period === 'month') return `${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}`;
+  if (period === 'month') {
+    return dateSystem === 'BS'
+      ? formatBsMonthYear(start)
+      : `${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}`;
+  }
+  if (dateSystem === 'BS') {
+    return `${formatBsDate(range.start)} – ${formatBsDate(range.end)}`;
+  }
   const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
   const startLabel = `${MONTH_NAMES[start.getMonth()].slice(0, 3)} ${start.getDate()}`;
   const endLabel = sameMonth ? `${end.getDate()}` : `${MONTH_NAMES[end.getMonth()].slice(0, 3)} ${end.getDate()}`;
@@ -97,6 +107,7 @@ function DeltaChip({ current, previous, favorableWhenUp }: { current: number; pr
 export default function ReportsScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { format: formatDate, dateSystem } = useDateFormat();
   const router = useRouter();
 
   const transactions = useAppStore((s) => s.transactions);
@@ -203,46 +214,44 @@ export default function ReportsScreen() {
   };
 
   // --- Calendar view data ---
-  const calendarKey = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, '0')}`;
-  const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
-  const leadingBlanks = (new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay() + 6) % 7;
+  // The grid itself follows the selected calendar system (true BS month lengths/weekdays in BS mode),
+  // not just a relabeled Gregorian grid — only the underlying AD ISO dates used to look up data stay fixed.
+  const monthGrid = useMemo(() => getMonthGrid(calendarMonth, dateSystem), [calendarMonth, dateSystem]);
+  const gridDates = useMemo(
+    () => new Set(monthGrid.cells.filter((c): c is MonthGridCell => c !== null).map((c) => c.adIso)),
+    [monthGrid]
+  );
 
   const dailyExpense = useMemo(() => {
     const map: Record<string, number> = {};
     for (const t of transactions) {
-      if (t.type !== 'expense' || t.date.slice(0, 7) !== calendarKey) continue;
+      if (t.type !== 'expense' || !gridDates.has(t.date)) continue;
       map[t.date] = (map[t.date] ?? 0) + t.amount;
     }
     return map;
-  }, [transactions, calendarKey]);
+  }, [transactions, gridDates]);
   const maxDailyExpense = Math.max(1, ...Object.values(dailyExpense));
 
   const dailyIncomeDates = useMemo(
-    () => new Set(transactions.filter((t) => t.type === 'income' && t.date.slice(0, 7) === calendarKey).map((t) => t.date)),
-    [transactions, calendarKey]
+    () => new Set(transactions.filter((t) => t.type === 'income' && gridDates.has(t.date)).map((t) => t.date)),
+    [transactions, gridDates]
   );
   const billsByDate = useMemo(() => {
     const map: Record<string, typeof bills> = {};
     for (const b of bills) {
-      if (b.dueDate.slice(0, 7) !== calendarKey) continue;
+      if (!gridDates.has(b.dueDate)) continue;
       (map[b.dueDate] ??= []).push(b);
     }
     return map;
-  }, [bills, calendarKey]);
+  }, [bills, gridDates]);
   const loansByDate = useMemo(() => {
     const map: Record<string, typeof loans> = {};
     for (const l of loans) {
-      if (!l.expectedReturnDate || l.expectedReturnDate.slice(0, 7) !== calendarKey) continue;
+      if (!l.expectedReturnDate || !gridDates.has(l.expectedReturnDate)) continue;
       (map[l.expectedReturnDate] ??= []).push(l);
     }
     return map;
-  }, [loans, calendarKey]);
-
-  const calendarCells = useMemo(() => {
-    const cells: (string | null)[] = Array(leadingBlanks).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(`${calendarKey}-${String(d).padStart(2, '0')}`);
-    return cells;
-  }, [leadingBlanks, daysInMonth, calendarKey]);
+  }, [loans, gridDates]);
 
   const selectedDayTransactions = useMemo(
     () => (selectedDay ? transactions.filter((t) => t.date === selectedDay) : []),
@@ -305,7 +314,7 @@ export default function ReportsScreen() {
               <TouchableOpacity onPress={() => stepPeriod(-1)} hitSlop={8}>
                 <Ionicons name="chevron-back" size={18} color={colors.text} />
               </TouchableOpacity>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{formatRangeLabel(period, range)}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{formatRangeLabel(period, range, dateSystem)}</Text>
               <TouchableOpacity onPress={() => stepPeriod(1)} hitSlop={8}>
                 <Ionicons name="chevron-forward" size={18} color={colors.text} />
               </TouchableOpacity>
@@ -313,7 +322,7 @@ export default function ReportsScreen() {
           )}
           {period === 'custom' && (
             <TouchableOpacity onPress={openCustomModal} style={{ alignSelf: 'center', marginBottom: spacing.lg }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>{formatRangeLabel(period, range)} ✎</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>{formatRangeLabel(period, range, dateSystem)} ✎</Text>
             </TouchableOpacity>
           )}
 
@@ -489,13 +498,11 @@ export default function ReportsScreen() {
         <>
           {/* Calendar */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.lg }}>
-            <TouchableOpacity onPress={() => setCalendarMonth((d) => addMonths(d, -1))} hitSlop={8}>
+            <TouchableOpacity onPress={() => setCalendarMonth((d) => shiftMonth(d, -1, dateSystem))} hitSlop={8}>
               <Ionicons name="chevron-back" size={18} color={colors.text} />
             </TouchableOpacity>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>
-              {MONTH_NAMES[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
-            </Text>
-            <TouchableOpacity onPress={() => setCalendarMonth((d) => addMonths(d, 1))} hitSlop={8}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{monthGrid.label}</Text>
+            <TouchableOpacity onPress={() => setCalendarMonth((d) => shiftMonth(d, 1, dateSystem))} hitSlop={8}>
               <Ionicons name="chevron-forward" size={18} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -510,8 +517,9 @@ export default function ReportsScreen() {
                   {d}
                 </Text>
               ))}
-              {calendarCells.map((iso, i) => {
-                if (!iso) return <View key={`blank-${i}`} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} />;
+              {monthGrid.cells.map((cell, i) => {
+                if (!cell) return <View key={`blank-${i}`} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} />;
+                const iso = cell.adIso;
                 const expense = dailyExpense[iso] ?? 0;
                 const intensity = Math.min(1, expense / maxDailyExpense);
                 const hasBill = !!billsByDate[iso];
@@ -532,7 +540,7 @@ export default function ReportsScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: isToday ? '800' : '500', color: colors.text }}>{Number(iso.slice(-2))}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: isToday ? '800' : '500', color: colors.text }}>{cell.dayNumber}</Text>
                       <View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
                         {hasBill && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.warning }} />}
                         {hasLoan && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.primary }} />}
@@ -592,7 +600,7 @@ export default function ReportsScreen() {
           <View style={{ backgroundColor: colors.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl, maxHeight: '78%' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
               <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>
-                {selectedDay ? formatFriendlyDate(selectedDay) : ''}
+                {selectedDay ? formatDate(selectedDay) : ''}
               </Text>
               <TouchableOpacity
                 onPress={() => {

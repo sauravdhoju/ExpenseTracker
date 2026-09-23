@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { initDatabase } from '../database/db';
 import * as accountRepo from '../database/accountRepo';
@@ -11,15 +12,20 @@ import * as settingsRepo from '../database/settingsRepo';
 import * as shortcutRepo from '../database/shortcutRepo';
 import * as loanRepo from '../database/loanRepo';
 import * as loanRepaymentRepo from '../database/loanRepaymentRepo';
+import * as forgottenRepo from '../database/forgottenRepo';
+import * as dailyTrackingRepo from '../database/dailyTrackingRepo';
 import { processDueRecurringTransactions } from '../services/recurringService';
-import { getBudgetUsage } from '../services/calculations';
+import { getBudgetUsage, getCurrentStreak, STREAK_MILESTONES, trackedDatesSet } from '../services/calculations';
 import { sendBudgetWarning, scheduleLoanReminder, cancelLoanReminder } from '../services/notificationService';
+import { addDays, monthKey, todayISO } from '../utils/date';
 import type {
   Account,
   AppSettings,
   Bill,
   Budget,
   Category,
+  DailyTracking,
+  ForgottenEntry,
   Goal,
   Loan,
   LoanRepayment,
@@ -27,6 +33,11 @@ import type {
   Shortcut,
   Transaction,
 } from '../types';
+
+/** Fire-and-forget: marks today tracked without its own refreshAll (the caller already does one). */
+async function autoMarkToday(): Promise<void> {
+  await dailyTrackingRepo.markTracked(todayISO());
+}
 
 interface AppState {
   isReady: boolean;
@@ -40,6 +51,8 @@ interface AppState {
   shortcuts: Shortcut[];
   loans: Loan[];
   repayments: LoanRepayment[];
+  forgottenEntries: ForgottenEntry[];
+  dailyTracking: DailyTracking[];
   settings: AppSettings;
 
   bootstrap: () => Promise<void>;
@@ -85,6 +98,16 @@ interface AppState {
   addRepayment: (input: loanRepaymentRepo.CreateRepaymentInput) => Promise<void>;
   removeRepayment: (id: string) => Promise<void>;
 
+  addForgottenEntry: (input: forgottenRepo.CreateForgottenEntryInput) => Promise<ForgottenEntry>;
+  addForgottenResolution: (
+    entryId: string,
+    input: { amount: number; categoryId: string; title: string; date: string; note?: string | null }
+  ) => Promise<void>;
+  removeForgottenEntry: (id: string) => Promise<void>;
+
+  markTodayTracked: () => Promise<void>;
+  applyGraceDay: () => Promise<void>;
+
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>;
 }
 
@@ -102,6 +125,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   shortcuts: [],
   loans: [],
   repayments: [],
+  forgottenEntries: [],
+  dailyTracking: [],
   settings: settingsRepo.DEFAULT_SETTINGS,
 
   bootstrap: async () => {
@@ -118,21 +143,50 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshAll: async () => {
-    const [accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, loans, repayments, settings] =
-      await Promise.all([
-        accountRepo.getAllAccounts(),
-        categoryRepo.getAllCategories(),
-        transactionRepo.getAllTransactions(),
-        budgetRepo.getAllBudgets(),
-        recurringRepo.getAllRecurring(),
-        billRepo.getAllBills(),
-        goalRepo.getAllGoals(),
-        shortcutRepo.getAllShortcuts(),
-        loanRepo.getAllLoans(),
-        loanRepaymentRepo.getAllRepayments(),
-        settingsRepo.getAllSettings(),
-      ]);
-    set({ accounts, categories, transactions, budgets, recurring, bills, goals, shortcuts, loans, repayments, settings });
+    const [
+      accounts,
+      categories,
+      transactions,
+      budgets,
+      recurring,
+      bills,
+      goals,
+      shortcuts,
+      loans,
+      repayments,
+      forgottenEntries,
+      dailyTracking,
+      settings,
+    ] = await Promise.all([
+      accountRepo.getAllAccounts(),
+      categoryRepo.getAllCategories(),
+      transactionRepo.getAllTransactions(),
+      budgetRepo.getAllBudgets(),
+      recurringRepo.getAllRecurring(),
+      billRepo.getAllBills(),
+      goalRepo.getAllGoals(),
+      shortcutRepo.getAllShortcuts(),
+      loanRepo.getAllLoans(),
+      loanRepaymentRepo.getAllRepayments(),
+      forgottenRepo.getAllForgottenEntries(),
+      dailyTrackingRepo.getAllTracking(),
+      settingsRepo.getAllSettings(),
+    ]);
+    set({
+      accounts,
+      categories,
+      transactions,
+      budgets,
+      recurring,
+      bills,
+      goals,
+      shortcuts,
+      loans,
+      repayments,
+      forgottenEntries,
+      dailyTracking,
+      settings,
+    });
   },
 
   addAccount: async (input) => {
@@ -179,6 +233,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const transaction = await transactionRepo.createTransaction(input);
+    await autoMarkToday();
     await get().refreshAll();
 
     if (budget && before && settings.budgetAlertEnabled) {
@@ -196,6 +251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   editTransaction: async (id, input) => {
     await transactionRepo.updateTransaction(id, input);
+    await autoMarkToday();
     await get().refreshAll();
   },
   removeTransaction: async (id) => {
@@ -287,6 +343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       date: loan.lentDate,
       loanId: loan.id,
     });
+    await autoMarkToday();
     await get().refreshAll();
 
     const { settings } = get();
@@ -351,11 +408,76 @@ export const useAppStore = create<AppState>((set, get) => ({
       notes: input.note,
       loanId: input.loanId,
     });
+    await autoMarkToday();
     await get().refreshAll();
   },
   removeRepayment: async (id) => {
     await transactionRepo.deleteTransaction(id);
     await loanRepaymentRepo.deleteRepayment(id);
+    await get().refreshAll();
+  },
+
+  addForgottenEntry: async (input) => {
+    const entry = await forgottenRepo.createForgottenEntry(input);
+    // The linked transaction reuses the entry's own id, so lookups/deletes never need a search.
+    await transactionRepo.createTransaction({
+      id: entry.id,
+      type: 'forgotten',
+      amount: entry.amount,
+      accountId: entry.accountId,
+      categoryId: null,
+      title: 'Forgotten Money',
+      date: entry.date,
+      forgottenId: entry.id,
+    });
+    await autoMarkToday();
+    await get().refreshAll();
+    return entry;
+  },
+  addForgottenResolution: async (entryId, input) => {
+    const category = get().categories.find((c) => c.id === input.categoryId);
+    await transactionRepo.createTransaction({
+      type: 'expense',
+      amount: input.amount,
+      accountId: get().forgottenEntries.find((e) => e.id === entryId)?.accountId ?? get().accounts[0]?.id ?? '',
+      categoryId: input.categoryId,
+      title: input.title || category?.name || 'Resolved expense',
+      date: input.date,
+      notes: input.note ?? null,
+      forgottenId: entryId,
+      affectsBalance: false,
+    });
+    await autoMarkToday();
+    await get().refreshAll();
+  },
+  removeForgottenEntry: async (id) => {
+    const linkedTransactionIds = get()
+      .transactions.filter((t) => t.forgottenId === id)
+      .map((t) => t.id);
+    for (const txId of linkedTransactionIds) {
+      await transactionRepo.deleteTransaction(txId);
+    }
+    await forgottenRepo.deleteForgottenEntry(id);
+    await get().refreshAll();
+  },
+
+  markTodayTracked: async () => {
+    const before = getCurrentStreak(trackedDatesSet(get().dailyTracking));
+    await dailyTrackingRepo.markTracked(todayISO());
+    await get().refreshAll();
+    const after = getCurrentStreak(trackedDatesSet(get().dailyTracking));
+    if (after > before && STREAK_MILESTONES.includes(after)) {
+      Alert.alert(`🎉 ${after} Day Streak!`, `You've consistently tracked your finances for ${after} days.`);
+    }
+  },
+  applyGraceDay: async () => {
+    const { settings, dailyTracking } = get();
+    if (!settings.graceDayEnabled) return;
+    const yesterday = addDays(todayISO(), -1);
+    if (trackedDatesSet(dailyTracking).has(yesterday)) return;
+    const alreadyUsed = await dailyTrackingRepo.hasGraceDayInMonth(monthKey(new Date()));
+    if (alreadyUsed) return;
+    await dailyTrackingRepo.useGraceDay(yesterday);
     await get().refreshAll();
   },
 

@@ -1,5 +1,16 @@
-import type { Account, Budget, Goal, Loan, LoanRepayment, LoanStatus, Transaction } from '../types';
-import { daysBetween, isSameDay, isSameWeek, monthKey, startOfWeek, toISODate, todayISO } from '../utils/date';
+import type {
+  Account,
+  Budget,
+  DailyTracking,
+  ForgottenEntry,
+  ForgottenStatus,
+  Goal,
+  Loan,
+  LoanRepayment,
+  LoanStatus,
+  Transaction,
+} from '../types';
+import { addDays, daysBetween, isSameDay, isSameWeek, monthKey, startOfWeek, toISODate, todayISO } from '../utils/date';
 
 export function getTotalBalance(accounts: Account[]): number {
   return accounts.filter((a) => a.isActive).reduce((sum, a) => sum + a.balance, 0);
@@ -69,6 +80,73 @@ export function getLoanSummary(loans: Loan[], repayments: LoanRepayment[]): Loan
   const recovered = totalLent - outstanding;
   const peopleOwing = loans.filter((l) => getLoanOutstanding(l, repayments) > 0).length;
   return { totalLent, outstanding, recovered, peopleOwing };
+}
+
+export function getForgottenResolvedAmount(entry: ForgottenEntry, transactions: Transaction[]): number {
+  return transactions
+    .filter((t) => t.type === 'expense' && t.forgottenId === entry.id)
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+export function getForgottenOutstanding(entry: ForgottenEntry, transactions: Transaction[]): number {
+  return entry.amount - getForgottenResolvedAmount(entry, transactions);
+}
+
+export function getForgottenStatus(entry: ForgottenEntry, transactions: Transaction[]): ForgottenStatus {
+  const outstanding = getForgottenOutstanding(entry, transactions);
+  if (outstanding <= 0) return 'resolved';
+  const resolved = getForgottenResolvedAmount(entry, transactions);
+  return resolved > 0 ? 'partial' : 'unresolved';
+}
+
+export interface ForgottenSummary {
+  totalForgotten: number;
+  outstanding: number;
+  resolved: number;
+  unresolvedCount: number;
+}
+
+export function getForgottenSummary(entries: ForgottenEntry[], transactions: Transaction[]): ForgottenSummary {
+  const totalForgotten = entries.reduce((sum, e) => sum + e.amount, 0);
+  const outstanding = entries.reduce((sum, e) => sum + Math.max(getForgottenOutstanding(e, transactions), 0), 0);
+  const resolved = totalForgotten - outstanding;
+  const unresolvedCount = entries.filter((e) => getForgottenOutstanding(e, transactions) > 0).length;
+  return { totalForgotten, outstanding, resolved, unresolvedCount };
+}
+
+// ---------------------------------------------------------------------------
+// Streaks: tracking-consistency, not spending behavior. A day "counts" if a
+// daily_tracking row exists for it (explicit mark-complete, a grace day, or
+// automatically because the user recorded something that day).
+// ---------------------------------------------------------------------------
+
+export function getCurrentStreak(trackedDates: Set<string>, today: string = todayISO()): number {
+  let cursor = trackedDates.has(today) ? today : addDays(today, -1);
+  if (!trackedDates.has(cursor)) return 0;
+  let count = 0;
+  while (trackedDates.has(cursor)) {
+    count++;
+    cursor = addDays(cursor, -1);
+  }
+  return count;
+}
+
+export function getLongestStreak(trackedDates: Set<string>): number {
+  if (trackedDates.size === 0) return 0;
+  const sorted = Array.from(trackedDates).sort();
+  let longest = 1;
+  let run = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    run = daysBetween(sorted[i - 1], sorted[i]) === 1 ? run + 1 : 1;
+    longest = Math.max(longest, run);
+  }
+  return longest;
+}
+
+export const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 365];
+
+export function trackedDatesSet(tracking: DailyTracking[]): Set<string> {
+  return new Set(tracking.map((t) => t.date));
 }
 
 export interface CategoryTotal {

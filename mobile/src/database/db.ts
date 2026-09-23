@@ -157,11 +157,39 @@ async function runMigrations(): Promise<void> {
       note TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS forgotten_entries (
+      id TEXT PRIMARY KEY,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS daily_tracking (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL UNIQUE,
+      completed INTEGER NOT NULL DEFAULT 1,
+      is_grace_day INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_daily_tracking_date ON daily_tracking(date);
   `);
 
   await addColumnIfMissing(db, 'transactions', 'time', "time TEXT NOT NULL DEFAULT '00:00'");
   await addColumnIfMissing(db, 'transactions', 'loan_id', 'loan_id TEXT REFERENCES loans(id) ON DELETE SET NULL');
+  await addColumnIfMissing(
+    db,
+    'transactions',
+    'forgotten_id',
+    'forgotten_id TEXT REFERENCES forgotten_entries(id) ON DELETE SET NULL'
+  );
+  await addColumnIfMissing(db, 'transactions', 'affects_balance', 'affects_balance INTEGER NOT NULL DEFAULT 1');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_loan ON transactions(loan_id);');
+  await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_forgotten ON transactions(forgotten_id);');
 
   await addColumnIfMissing(db, 'goals', 'updated_at', "updated_at TEXT NOT NULL DEFAULT ''");
   await db.execAsync("UPDATE goals SET updated_at = created_at WHERE updated_at = '';");
@@ -170,6 +198,8 @@ async function runMigrations(): Promise<void> {
 export async function resetDatabase(): Promise<void> {
   const db = await getDb();
   await db.execAsync(`
+    DROP TABLE IF EXISTS daily_tracking;
+    DROP TABLE IF EXISTS forgotten_entries;
     DROP TABLE IF EXISTS loan_repayments;
     DROP TABLE IF EXISTS loans;
     DROP TABLE IF EXISTS transactions;

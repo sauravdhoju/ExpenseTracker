@@ -16,6 +16,8 @@ interface TransactionRow {
   time: string;
   recurring_id: string | null;
   loan_id: string | null;
+  forgotten_id: string | null;
+  affects_balance: number;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +36,8 @@ function mapRow(row: TransactionRow): Transaction {
     time: row.time,
     recurringId: row.recurring_id,
     loanId: row.loan_id,
+    forgottenId: row.forgotten_id,
+    affectsBalance: !!row.affects_balance,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -69,6 +73,10 @@ export interface CreateTransactionInput {
   time?: string;
   recurringId?: string | null;
   loanId?: string | null;
+  forgottenId?: string | null;
+  /** false skips the balance effect entirely — used for a forgotten-money resolution, where the
+   *  balance was already debited by the original `forgotten` transaction. Defaults to true. */
+  affectsBalance?: boolean;
 }
 
 function currentTime(): string {
@@ -80,8 +88,10 @@ async function applyBalanceEffect(t: {
   amount: number;
   accountId: string;
   toAccountId: string | null;
+  affectsBalance: boolean;
 }) {
-  if (t.type === 'expense' || t.type === 'lent') {
+  if (!t.affectsBalance) return;
+  if (t.type === 'expense' || t.type === 'lent' || t.type === 'forgotten') {
     await adjustAccountBalance(t.accountId, -t.amount);
   } else if (t.type === 'income' || t.type === 'repayment') {
     await adjustAccountBalance(t.accountId, t.amount);
@@ -96,8 +106,10 @@ async function reverseBalanceEffect(t: {
   amount: number;
   accountId: string;
   toAccountId: string | null;
+  affectsBalance: boolean;
 }) {
-  if (t.type === 'expense' || t.type === 'lent') {
+  if (!t.affectsBalance) return;
+  if (t.type === 'expense' || t.type === 'lent' || t.type === 'forgotten') {
     await adjustAccountBalance(t.accountId, t.amount);
   } else if (t.type === 'income' || t.type === 'repayment') {
     await adjustAccountBalance(t.accountId, -t.amount);
@@ -114,11 +126,12 @@ export async function createTransaction(
   const id = input.id ?? generateId();
   const now = new Date().toISOString();
   const time = input.time ?? currentTime();
+  const affectsBalance = input.affectsBalance ?? true;
 
   await db.runAsync(
     `INSERT INTO transactions
-       (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, forgotten_id, affects_balance, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.type,
     input.amount,
@@ -131,6 +144,8 @@ export async function createTransaction(
     time,
     input.recurringId ?? null,
     input.loanId ?? null,
+    input.forgottenId ?? null,
+    affectsBalance ? 1 : 0,
     now,
     now
   );
@@ -140,6 +155,7 @@ export async function createTransaction(
     amount: input.amount,
     accountId: input.accountId,
     toAccountId: input.toAccountId ?? null,
+    affectsBalance,
   });
 
   return {
@@ -155,6 +171,8 @@ export async function createTransaction(
     time,
     recurringId: input.recurringId ?? null,
     loanId: input.loanId ?? null,
+    forgottenId: input.forgottenId ?? null,
+    affectsBalance,
     createdAt: now,
     updatedAt: now,
   };
@@ -171,10 +189,12 @@ export async function updateTransaction(
 
   await reverseBalanceEffect(existing);
 
+  const affectsBalance = input.affectsBalance ?? existing.affectsBalance;
+
   await db.runAsync(
     `UPDATE transactions SET
        type = ?, amount = ?, account_id = ?, to_account_id = ?, category_id = ?,
-       title = ?, notes = ?, date = ?, updated_at = ?
+       title = ?, notes = ?, date = ?, affects_balance = ?, updated_at = ?
      WHERE id = ?`,
     input.type,
     input.amount,
@@ -184,6 +204,7 @@ export async function updateTransaction(
     input.title,
     input.notes ?? null,
     input.date,
+    affectsBalance ? 1 : 0,
     new Date().toISOString(),
     id
   );
@@ -193,6 +214,7 @@ export async function updateTransaction(
     amount: input.amount,
     accountId: input.accountId,
     toAccountId: input.toAccountId ?? null,
+    affectsBalance,
   });
 }
 

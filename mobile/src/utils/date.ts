@@ -44,6 +44,12 @@ export function addMonths(date: Date, count: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + count, 1);
 }
 
+export function addDays(iso: string, delta: number): string {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  return toISODate(d);
+}
+
 export function daysBetween(fromISO: string, toISOStr: string): number {
   const from = new Date(fromISO + 'T00:00:00');
   const to = new Date(toISOStr + 'T00:00:00');

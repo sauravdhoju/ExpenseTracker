@@ -3,9 +3,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { getLoanOutstanding, getLoanStatus, getLoanSummary } from '../../../src/services/calculations';
-import { formatFriendlyDate } from '../../../src/utils/date';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import EmptyState from '../../../src/components/ui/EmptyState';
@@ -20,6 +20,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function LoansScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { format: formatDate } = useDateFormat();
   const router = useRouter();
   const loans = useAppStore((s) => s.loans);
   const repayments = useAppStore((s) => s.repayments);
@@ -90,7 +91,7 @@ export default function LoansScreen() {
                     <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
                       {status === 'repaid'
                         ? `Paid ${format(loan.originalAmount)}`
-                        : `${STATUS_LABEL[status]}${loan.expectedReturnDate ? ` · Due ${formatFriendlyDate(loan.expectedReturnDate)}` : ''}`}
+                        : `${STATUS_LABEL[status]}${loan.expectedReturnDate ? ` · Due ${formatDate(loan.expectedReturnDate)}` : ''}`}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>

@@ -4,9 +4,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { getLoanOutstanding, getLoanStatus } from '../../../src/services/calculations';
-import { formatFriendlyDate, todayISO } from '../../../src/utils/date';
+import { todayISO } from '../../../src/utils/date';
 import { spacing, radius } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import Button from '../../../src/components/ui/Button';
@@ -16,6 +17,7 @@ import EmptyState from '../../../src/components/ui/EmptyState';
 export default function LoanDetailScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { format: formatDate } = useDateFormat();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -133,8 +135,8 @@ export default function LoanDetailScreen() {
           <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md }} />
 
           <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: 2 }}>
-            Lent on {formatFriendlyDate(loan.lentDate)}
-            {loan.expectedReturnDate ? ` · Due ${formatFriendlyDate(loan.expectedReturnDate)}` : ''}
+            Lent on {formatDate(loan.lentDate)}
+            {loan.expectedReturnDate ? ` · Due ${formatDate(loan.expectedReturnDate)}` : ''}
           </Text>
           {loan.reason ? <Text style={{ fontSize: 12, color: colors.textLight }}>Reason: {loan.reason}</Text> : null}
           {loan.note ? <Text style={{ fontSize: 12, color: colors.textLight }}>Note: {loan.note}</Text> : null}
@@ -160,7 +162,7 @@ export default function LoanDetailScreen() {
               <Card key={r.id} style={{ marginBottom: spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-                    {formatFriendlyDate(r.date)}
+                    {formatDate(r.date)}
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
                     {account?.name ?? 'Account'}

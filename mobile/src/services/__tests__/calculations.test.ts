@@ -27,8 +27,15 @@ import {
   getForgottenLoans,
   getIdleGoals,
   getIdleAccounts,
+  getForgottenOutstanding,
+  getForgottenStatus,
+  getForgottenSummary,
+  getCurrentStreak,
+  getLongestStreak,
 } from '../calculations';
-import type { Account, Budget, Goal, Loan, LoanRepayment, Transaction } from '../../types';
+import { adIsoToBs, bsToAdIso, BS_MONTH_NAMES, getMonthGrid, shiftMonth } from '../../utils/bsDate';
+import { toISODate } from '../../utils/date';
+import type { Account, Budget, ForgottenEntry, Goal, Loan, LoanRepayment, Transaction } from '../../types';
 
 function makeTransaction(overrides: Partial<Transaction>): Transaction {
   return {
@@ -44,6 +51,8 @@ function makeTransaction(overrides: Partial<Transaction>): Transaction {
     time: '12:00',
     recurringId: null,
     loanId: null,
+    forgottenId: null,
+    affectsBalance: true,
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
     ...overrides,
@@ -548,5 +557,146 @@ describe('getIdleAccounts', () => {
     const inactive = makeAccount({ id: 'a3', isActive: false, balance: 5000 });
     const transactions = [makeTransaction({ id: '1', accountId: 'a1', date: '2026-09-10' })];
     expect(getIdleAccounts([active, zero, inactive], transactions, '2026-09-15')).toHaveLength(0);
+  });
+});
+
+function makeForgottenEntry(overrides: Partial<ForgottenEntry>): ForgottenEntry {
+  return {
+    id: 'forgot1',
+    amount: 2000,
+    date: '2026-09-18',
+    accountId: 'acc1',
+    note: null,
+    createdAt: '2026-09-18T00:00:00.000Z',
+    updatedAt: '2026-09-18T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('Forgotten Money: outstanding / status / summary', () => {
+  it('is unresolved with no resolution transactions', () => {
+    const entry = makeForgottenEntry({});
+    expect(getForgottenOutstanding(entry, [])).toBe(2000);
+    expect(getForgottenStatus(entry, [])).toBe('unresolved');
+  });
+
+  it('is partial when some but not all of the amount is resolved into real expenses', () => {
+    const entry = makeForgottenEntry({ amount: 2000 });
+    const transactions = [
+      makeTransaction({ id: 'r1', type: 'expense', amount: 1200, forgottenId: 'forgot1', categoryId: 'food' }),
+    ];
+    expect(getForgottenOutstanding(entry, transactions)).toBe(800);
+    expect(getForgottenStatus(entry, transactions)).toBe('partial');
+  });
+
+  it('is resolved once resolutions cover the full amount, using multiple categorized line items', () => {
+    const entry = makeForgottenEntry({ amount: 2000 });
+    const transactions = [
+      makeTransaction({ id: 'r1', type: 'expense', amount: 1200, forgottenId: 'forgot1', categoryId: 'food' }),
+      makeTransaction({ id: 'r2', type: 'expense', amount: 800, forgottenId: 'forgot1', categoryId: 'transport' }),
+    ];
+    expect(getForgottenOutstanding(entry, transactions)).toBe(0);
+    expect(getForgottenStatus(entry, transactions)).toBe('resolved');
+  });
+
+  it('ignores the placeholder "forgotten" transaction itself and transactions for other entries', () => {
+    const entry = makeForgottenEntry({ amount: 2000 });
+    const transactions = [
+      makeTransaction({ id: 'forgot1', type: 'forgotten', amount: 2000, forgottenId: 'forgot1', categoryId: null }),
+      makeTransaction({ id: 'other', type: 'expense', amount: 500, forgottenId: 'some-other-entry' }),
+    ];
+    expect(getForgottenOutstanding(entry, transactions)).toBe(2000);
+  });
+
+  it('summarizes total/outstanding/resolved and count across entries', () => {
+    const entries = [
+      makeForgottenEntry({ id: 'a', amount: 2000 }),
+      makeForgottenEntry({ id: 'b', amount: 5000 }),
+    ];
+    const transactions = [
+      makeTransaction({ id: 'r1', type: 'expense', amount: 2000, forgottenId: 'a' }), // fully resolved
+      makeTransaction({ id: 'r2', type: 'expense', amount: 3500, forgottenId: 'b' }), // partial
+    ];
+    const summary = getForgottenSummary(entries, transactions);
+    expect(summary.totalForgotten).toBe(7000);
+    expect(summary.resolved).toBe(5500);
+    expect(summary.outstanding).toBe(1500);
+    expect(summary.unresolvedCount).toBe(1);
+  });
+});
+
+describe('Streaks: getCurrentStreak / getLongestStreak', () => {
+  it('counts consecutive days ending today', () => {
+    const tracked = new Set(['2026-09-13', '2026-09-14', '2026-09-15']);
+    expect(getCurrentStreak(tracked, '2026-09-15')).toBe(3);
+  });
+
+  it('stays alive using yesterday when today is not tracked yet', () => {
+    const tracked = new Set(['2026-09-13', '2026-09-14']);
+    expect(getCurrentStreak(tracked, '2026-09-15')).toBe(2);
+  });
+
+  it('resets to 0 when a full day has passed untracked', () => {
+    const tracked = new Set(['2026-09-10', '2026-09-11']);
+    expect(getCurrentStreak(tracked, '2026-09-15')).toBe(0);
+  });
+
+  it('handles a streak that spans a month and year boundary', () => {
+    const tracked = new Set(['2025-12-30', '2025-12-31', '2026-01-01', '2026-01-02']);
+    expect(getCurrentStreak(tracked, '2026-01-02')).toBe(4);
+  });
+
+  it('longest streak survives a later reset and ignores non-consecutive gaps', () => {
+    const tracked = new Set(['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-10', '2026-09-15']);
+    expect(getLongestStreak(tracked)).toBe(3);
+  });
+
+  it('longest streak is 0 for no tracked days', () => {
+    expect(getLongestStreak(new Set())).toBe(0);
+  });
+});
+
+describe('AD/BS date conversion', () => {
+  it('round-trips a known AD date through BS and back', () => {
+    const bs = adIsoToBs('2026-09-23');
+    expect(bs.year).toBeGreaterThan(2000);
+    const backToAd = bsToAdIso(bs.year, bs.month, bs.date);
+    expect(backToAd).toBe('2026-09-23');
+  });
+});
+
+describe('BS calendar grid', () => {
+  it('builds a grid whose cells are true BS-month length, not a relabeled AD month', () => {
+    const anchor = new Date('2026-09-23T00:00:00');
+    const grid = getMonthGrid(anchor, 'BS');
+    const dayCells = grid.cells.filter((c): c is NonNullable<typeof c> => c !== null);
+    // BS months are always 29-32 days, never exactly a Gregorian month's length by coincidence every time.
+    expect(dayCells.length).toBeGreaterThanOrEqual(29);
+    expect(dayCells.length).toBeLessThanOrEqual(32);
+    // Every cell's AD ISO date must actually fall in the BS month the label claims.
+    for (const cell of dayCells) {
+      const bs = adIsoToBs(cell.adIso);
+      expect(`${BS_MONTH_NAMES[bs.month - 1]} ${bs.year}`).toBe(grid.label);
+    }
+    // Day numbers are sequential BS day-of-month, not the AD day-of-month.
+    expect(dayCells.map((c) => c.dayNumber)).toEqual(dayCells.map((_, i) => i + 1));
+  });
+
+  it('builds a standard Gregorian grid in AD mode', () => {
+    const grid = getMonthGrid(new Date('2026-09-15T00:00:00'), 'AD');
+    const dayCells = grid.cells.filter((c): c is NonNullable<typeof c> => c !== null);
+    expect(dayCells).toHaveLength(30);
+    expect(grid.label).toBe('September 2026');
+  });
+
+  it('shiftMonth in BS mode moves by a true BS month, wrapping the BS year at month 12/1', () => {
+    const anchor = new Date('2026-09-23T00:00:00'); // some BS month
+    const bsBefore = adIsoToBs(toISODate(anchor));
+    const shifted = shiftMonth(anchor, 1, 'BS');
+    const bsAfter = adIsoToBs(toISODate(shifted));
+    const expectedMonth = bsBefore.month === 12 ? 1 : bsBefore.month + 1;
+    const expectedYear = bsBefore.month === 12 ? bsBefore.year + 1 : bsBefore.year;
+    expect(bsAfter.month).toBe(expectedMonth);
+    expect(bsAfter.year).toBe(expectedYear);
   });
 });

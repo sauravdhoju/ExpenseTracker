@@ -3,8 +3,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
-import { daysBetween, formatFriendlyDate, todayISO } from '../../../src/utils/date';
+import { daysBetween, todayISO } from '../../../src/utils/date';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import EmptyState from '../../../src/components/ui/EmptyState';
@@ -13,6 +14,7 @@ import IconCircle from '../../../src/components/ui/IconCircle';
 export default function BillsScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { format: formatDate } = useDateFormat();
   const router = useRouter();
   const bills = useAppStore((s) => s.bills);
   const setBillPaid = useAppStore((s) => s.setBillPaid);
@@ -42,7 +44,7 @@ export default function BillsScreen() {
           <View style={{ flex: 1, marginLeft: spacing.md }}>
             <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>{bill.title}</Text>
             <Text style={{ fontSize: 12, color: overdue ? colors.expense : colors.textLight, marginTop: 2 }}>
-              {bill.isPaid ? 'Paid' : overdue ? `Overdue · was due ${formatFriendlyDate(bill.dueDate)}` : `Due ${formatFriendlyDate(bill.dueDate)} · ${days} day${days === 1 ? '' : 's'}`}
+              {bill.isPaid ? 'Paid' : overdue ? `Overdue · was due ${formatDate(bill.dueDate)}` : `Due ${formatDate(bill.dueDate)} · ${days} day${days === 1 ? '' : 's'}`}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>

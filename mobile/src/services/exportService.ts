@@ -9,6 +9,8 @@ import { getAllGoals } from '../database/goalRepo';
 import { getAllRecurring } from '../database/recurringRepo';
 import { getAllLoans } from '../database/loanRepo';
 import { getAllRepayments } from '../database/loanRepaymentRepo';
+import { getAllForgottenEntries } from '../database/forgottenRepo';
+import { getAllTracking } from '../database/dailyTrackingRepo';
 import { getDb, resetDatabase } from '../database/db';
 import type { Transaction } from '../types';
 
@@ -23,20 +25,34 @@ export interface BackupData {
   recurringTransactions: Awaited<ReturnType<typeof getAllRecurring>>;
   loans: Awaited<ReturnType<typeof getAllLoans>>;
   loanRepayments: Awaited<ReturnType<typeof getAllRepayments>>;
+  forgottenEntries: Awaited<ReturnType<typeof getAllForgottenEntries>>;
+  dailyTracking: Awaited<ReturnType<typeof getAllTracking>>;
 }
 
 export async function buildBackup(): Promise<BackupData> {
-  const [accounts, categories, transactions, budgets, goals, recurringTransactions, loans, loanRepayments] =
-    await Promise.all([
-      getAllAccounts(),
-      getAllCategories(),
-      getAllTransactions(),
-      getAllBudgets(),
-      getAllGoals(),
-      getAllRecurring(),
-      getAllLoans(),
-      getAllRepayments(),
-    ]);
+  const [
+    accounts,
+    categories,
+    transactions,
+    budgets,
+    goals,
+    recurringTransactions,
+    loans,
+    loanRepayments,
+    forgottenEntries,
+    dailyTracking,
+  ] = await Promise.all([
+    getAllAccounts(),
+    getAllCategories(),
+    getAllTransactions(),
+    getAllBudgets(),
+    getAllGoals(),
+    getAllRecurring(),
+    getAllLoans(),
+    getAllRepayments(),
+    getAllForgottenEntries(),
+    getAllTracking(),
+  ]);
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -48,6 +64,8 @@ export async function buildBackup(): Promise<BackupData> {
     recurringTransactions,
     loans,
     loanRepayments,
+    forgottenEntries,
+    dailyTracking,
   };
 }
 
@@ -183,12 +201,30 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
     );
   }
 
+  // Forgotten entries are inserted before transactions since transactions.forgotten_id references them.
+  for (const f of backup.forgottenEntries ?? []) {
+    await db.runAsync(
+      `INSERT INTO forgotten_entries (id, amount, date, account_id, note, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      f.id, f.amount, f.date, f.accountId, f.note, f.createdAt, f.updatedAt
+    );
+  }
+
   for (const t of backup.transactions) {
     await db.runAsync(
-      `INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, forgotten_id, affects_balance, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       t.id, t.type, t.amount, t.accountId, t.toAccountId, t.categoryId, t.title, t.notes,
-      t.date, t.time ?? '00:00', t.recurringId, t.loanId ?? null, t.createdAt, t.updatedAt
+      t.date, t.time ?? '00:00', t.recurringId, t.loanId ?? null, t.forgottenId ?? null,
+      t.affectsBalance === false ? 0 : 1, t.createdAt, t.updatedAt
+    );
+  }
+
+  for (const d of backup.dailyTracking ?? []) {
+    await db.runAsync(
+      `INSERT INTO daily_tracking (id, date, completed, is_grace_day, completed_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      d.id, d.date, d.completed ? 1 : 0, d.isGraceDay ? 1 : 0, d.completedAt, d.createdAt
     );
   }
 

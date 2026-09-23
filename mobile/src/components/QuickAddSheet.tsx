@@ -44,12 +44,21 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
       icon: 'people-circle' as const,
       color: colors.primary,
     },
+    {
+      type: 'forgotten',
+      label: 'Forgotten Money',
+      subtitle: "Money you can't place yet",
+      icon: 'help-circle' as const,
+      color: colors.warning,
+    },
   ];
 
   const handlePick = (type: string) => {
     onClose();
     if (type === 'lent') {
       router.push('/loans/new');
+    } else if (type === 'forgotten') {
+      router.push('/forgotten/new');
     } else {
       router.push({ pathname: '/transaction/new', params: { type } });
     }
