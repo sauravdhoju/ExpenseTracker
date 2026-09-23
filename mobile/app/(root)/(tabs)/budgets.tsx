@@ -3,6 +3,7 @@ import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } fro
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { filterByMonth, getBudgetUsage } from '../../../src/services/calculations';
 import { spacing, radius } from '../../../src/constants/theme';
@@ -15,6 +16,7 @@ import Button from '../../../src/components/ui/Button';
 export default function BudgetsScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { dateSystem } = useDateFormat();
   const budgets = useAppStore((s) => s.budgets);
   const categories = useAppStore((s) => s.categories);
   const transactions = useAppStore((s) => s.transactions);
@@ -25,7 +27,10 @@ export default function BudgetsScreen() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
 
-  const monthTransactions = useMemo(() => filterByMonth(transactions, new Date()), [transactions]);
+  const monthTransactions = useMemo(
+    () => filterByMonth(transactions, new Date(), dateSystem),
+    [transactions, dateSystem]
+  );
   const expenseCategories = categories.filter((c) => c.kind === 'expense');
   const usedCategoryIds = new Set(budgets.filter((b) => b.categoryId).map((b) => b.categoryId));
 

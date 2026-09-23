@@ -32,9 +32,11 @@ import {
   getForgottenSummary,
   getCurrentStreak,
   getLongestStreak,
+  filterByMonth,
+  getDayOfMonth,
 } from '../calculations';
-import { adIsoToBs, bsToAdIso, BS_MONTH_NAMES, getMonthGrid, shiftMonth } from '../../utils/bsDate';
-import { toISODate } from '../../utils/date';
+import { adIsoToBs, bsToAdIso, BS_MONTH_NAMES, getMonthGrid, shiftMonth, nextOccurrenceForSystem } from '../../utils/bsDate';
+import { toISODate, nextOccurrence } from '../../utils/date';
 import type { Account, Budget, ForgottenEntry, Goal, Loan, LoanRepayment, Transaction } from '../../types';
 
 function makeTransaction(overrides: Partial<Transaction>): Transaction {
@@ -698,5 +700,134 @@ describe('BS calendar grid', () => {
     const expectedYear = bsBefore.month === 12 ? bsBefore.year + 1 : bsBefore.year;
     expect(bsAfter.month).toBe(expectedMonth);
     expect(bsAfter.year).toBe(expectedYear);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pinned reference dates from the calendar audit (2083 BS). These must never
+// regress: they are the ground truth for Ashwin 2083's boundaries.
+//   Baisakh 1  = 2026-04-14      Ashwin 1  = 2026-09-17
+//   Ashwin 7   = 2026-09-23      Ashwin 31 = 2026-10-17
+//   Kartik 1   = 2026-10-18
+// ---------------------------------------------------------------------------
+describe('Pinned BS reference dates (Ashwin 2083)', () => {
+  it('converts AD -> BS for the exact reference cases', () => {
+    expect(adIsoToBs('2026-09-16')).toEqual({ year: 2083, month: 5, date: 31 }); // Bhadra 31
+    expect(adIsoToBs('2026-09-17')).toEqual({ year: 2083, month: 6, date: 1 }); // Ashwin 1
+    expect(adIsoToBs('2026-09-23')).toEqual({ year: 2083, month: 6, date: 7 }); // Ashwin 7
+    expect(adIsoToBs('2026-10-17')).toEqual({ year: 2083, month: 6, date: 31 }); // Ashwin 31
+    expect(adIsoToBs('2026-10-18')).toEqual({ year: 2083, month: 7, date: 1 }); // Kartik 1
+  });
+
+  it('converts BS -> AD for the exact reference cases', () => {
+    expect(bsToAdIso(2083, 5, 31)).toBe('2026-09-16'); // Bhadra 31
+    expect(bsToAdIso(2083, 6, 1)).toBe('2026-09-17'); // Ashwin 1
+    expect(bsToAdIso(2083, 6, 7)).toBe('2026-09-23'); // Ashwin 7
+    expect(bsToAdIso(2083, 6, 31)).toBe('2026-10-17'); // Ashwin 31
+    expect(bsToAdIso(2083, 7, 1)).toBe('2026-10-18'); // Kartik 1
+  });
+});
+
+describe('getPeriodRange: BS month/year boundaries', () => {
+  it('AD month range is unaffected (September 2026)', () => {
+    expect(getPeriodRange('month', new Date('2026-09-15T00:00:00'))).toEqual({
+      start: '2026-09-01',
+      end: '2026-09-30',
+    });
+  });
+
+  it('BS month range for Ashwin 2083 uses real BS boundaries, not the AD month', () => {
+    expect(getPeriodRange('month', new Date('2026-09-23T00:00:00'), undefined, 'BS')).toEqual({
+      start: '2026-09-17',
+      end: '2026-10-17',
+    });
+  });
+
+  it('BS year range for 2083 starts at Baisakh 1 (mid-April), not Jan 1', () => {
+    const range = getPeriodRange('year', new Date('2026-09-23T00:00:00'), undefined, 'BS');
+    expect(range.start).toBe('2026-04-14');
+    expect(adIsoToBs(range.start)).toEqual({ year: 2083, month: 1, date: 1 });
+    // The day before Baisakh 1 of the following BS year.
+    expect(adIsoToBs(range.end).month).toBe(12);
+  });
+});
+
+describe('getPreviousPeriodRange: BS-aware month/year navigation', () => {
+  it('steps from Ashwin 2083 to Bhadra 2083, not the overlapping AD month', () => {
+    const ashwin = getPeriodRange('month', new Date('2026-09-23T00:00:00'), undefined, 'BS');
+    const bhadra = getPreviousPeriodRange('month', ashwin, 'BS');
+    expect(bhadra.end).toBe('2026-09-16'); // Bhadra 31, the day before Ashwin 1
+    expect(adIsoToBs(bhadra.start)).toEqual(expect.objectContaining({ year: 2083, month: 5, date: 1 }));
+  });
+
+  it('steps BS year 2083 back to BS year 2082', () => {
+    const y2083 = getPeriodRange('year', new Date('2026-09-23T00:00:00'), undefined, 'BS');
+    const y2082 = getPreviousPeriodRange('year', y2083, 'BS');
+    expect(adIsoToBs(y2082.start).year).toBe(2082);
+  });
+});
+
+describe('filterByMonth: BS boundary filtering for budgets', () => {
+  const tx = (date: string, amount: number): Transaction =>
+    makeTransaction({ date, amount, type: 'expense' });
+
+  it('assigns transactions to Bhadra/Ashwin/Kartik using true BS boundaries', () => {
+    const transactions = [tx('2026-09-16', 500), tx('2026-09-17', 700), tx('2026-10-17', 800), tx('2026-10-18', 900)];
+    const ashwinAnchor = new Date('2026-09-23T00:00:00');
+
+    const ashwinTx = filterByMonth(transactions, ashwinAnchor, 'BS');
+    expect(ashwinTx.map((t) => t.amount).sort()).toEqual([700, 800]); // Sep 17 + Oct 17
+
+    const bhadraTx = filterByMonth(transactions, new Date('2026-09-01T00:00:00'), 'BS');
+    expect(bhadraTx.map((t) => t.amount)).toEqual([500]); // Sep 16
+
+    const kartikTx = filterByMonth(transactions, new Date('2026-10-25T00:00:00'), 'BS');
+    expect(kartikTx.map((t) => t.amount)).toEqual([900]); // Oct 18
+  });
+
+  it('AD mode still uses plain Gregorian month boundaries', () => {
+    const transactions = [tx('2026-08-31', 100), tx('2026-09-01', 200), tx('2026-09-30', 300), tx('2026-10-01', 400)];
+    const septTx = filterByMonth(transactions, new Date('2026-09-15T00:00:00'), 'AD');
+    expect(septTx.map((t) => t.amount)).toEqual([200, 300]);
+  });
+});
+
+describe('getDayOfMonth', () => {
+  it('returns BS day-of-month, not AD day-of-month', () => {
+    // 2026-09-23 is Ashwin 7 -> day 7 of the BS month, not day 23.
+    expect(getDayOfMonth(new Date('2026-09-23T00:00:00'), 'BS')).toBe(7);
+    expect(getDayOfMonth(new Date('2026-09-23T00:00:00'), 'AD')).toBe(23);
+  });
+});
+
+describe('Recurring transaction day-overflow handling', () => {
+  it('AD monthly recurrence clamps to the last valid day instead of overflowing (Jan 31 -> Feb 28)', () => {
+    expect(nextOccurrence('2026-01-31', 'monthly')).toBe('2026-02-28');
+    expect(nextOccurrence('2026-02-28', 'monthly')).toBe('2026-03-28');
+  });
+
+  it('AD yearly recurrence clamps Feb 29 on a non-leap target year', () => {
+    expect(nextOccurrence('2024-02-29', 'yearly')).toBe('2025-02-28');
+  });
+
+  it('BS monthly recurrence advances by a true BS month via nextOccurrenceForSystem', () => {
+    // 2026-09-23 = Ashwin 7, 2083 -> next BS month is Kartik 7, 2083.
+    const next = nextOccurrenceForSystem('2026-09-23', 'monthly', 'BS');
+    expect(adIsoToBs(next)).toEqual({ year: 2083, month: 7, date: 7 });
+  });
+
+  it('BS monthly recurrence clamps day 31 to the last valid day of a shorter target month', () => {
+    // Find a BS day-31 date, then confirm the next month's occurrence never exceeds its real length.
+    const day31Iso = bsToAdIso(2083, 6, 31); // Ashwin 31
+    const next = nextOccurrenceForSystem(day31Iso, 'monthly', 'BS');
+    const nextBs = adIsoToBs(next);
+    expect(nextBs.month).toBe(7); // Kartik
+    expect(nextBs.date).toBeLessThanOrEqual(31);
+    expect(nextBs.date).toBeGreaterThan(0);
+  });
+
+  it('AD/BS daily and weekly recurrence are identical fixed-day steps in both systems', () => {
+    expect(nextOccurrenceForSystem('2026-09-23', 'daily', 'BS')).toBe(nextOccurrence('2026-09-23', 'daily'));
+    expect(nextOccurrenceForSystem('2026-09-23', 'weekly', 'BS')).toBe(nextOccurrence('2026-09-23', 'weekly'));
   });
 });

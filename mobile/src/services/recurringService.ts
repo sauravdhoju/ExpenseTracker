@@ -1,7 +1,9 @@
 import { getAllRecurring, updateNextOccurrence } from '../database/recurringRepo';
 import { createTransaction } from '../database/transactionRepo';
 import { createBill } from '../database/billRepo';
-import { nextOccurrence, todayISO } from '../utils/date';
+import { getSetting } from '../database/settingsRepo';
+import { todayISO } from '../utils/date';
+import { nextOccurrenceForSystem } from '../utils/bsDate';
 import type { RecurringTransaction } from '../types';
 
 /**
@@ -9,10 +11,15 @@ import type { RecurringTransaction } from '../types';
  * into real transactions + bill reminders, then advances their schedule.
  * Safe to call on every app start (idempotent per-day: it only fires once
  * next_occurrence has been advanced past today).
+ *
+ * "Monthly"/"yearly" follow the user's current calendar preference (AD or
+ * BS) rather than a per-recurrence field, consistent with how budgets and
+ * reports resolve their calendar — see mobile date/calendar architecture.
  */
 export async function processDueRecurringTransactions(): Promise<RecurringTransaction[]> {
   const all = await getAllRecurring();
   const today = todayISO();
+  const dateSystem = (await getSetting('dateSystem')) ?? 'AD';
   const processed: RecurringTransaction[] = [];
 
   for (const r of all) {
@@ -41,7 +48,7 @@ export async function processDueRecurringTransactions(): Promise<RecurringTransa
         });
       }
 
-      cursor = nextOccurrence(cursor, r.frequency);
+      cursor = nextOccurrenceForSystem(cursor, r.frequency, dateSystem);
       iterations += 1;
     }
 

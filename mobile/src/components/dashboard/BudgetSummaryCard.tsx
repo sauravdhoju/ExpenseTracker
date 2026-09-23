@@ -2,6 +2,7 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useCurrency } from '../../hooks/useCurrency';
+import { useDateFormat } from '../../hooks/useDateFormat';
 import { useAppStore } from '../../store/useAppStore';
 import { filterByMonth, getBudgetEngineSummary, getBudgetUsage } from '../../services/calculations';
 import { spacing } from '../../constants/theme';
@@ -27,6 +28,7 @@ function Row({ label, value, valueColor }: { label: string; value: string; value
 export default function BudgetSummaryCard({ transactions }: Props) {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { dateSystem } = useDateFormat();
   const router = useRouter();
   const budgets = useAppStore((s) => s.budgets);
   const categories = useAppStore((s) => s.categories);
@@ -49,8 +51,8 @@ export default function BudgetSummaryCard({ transactions }: Props) {
   }
 
   const now = new Date();
-  const summary = getBudgetEngineSummary(overall.amount, transactions, now);
-  const monthTransactions = filterByMonth(transactions, now);
+  const summary = getBudgetEngineSummary(overall.amount, transactions, now, dateSystem);
+  const monthTransactions = filterByMonth(transactions, now, dateSystem);
   const weekPercent =
     summary.weeklyAllowance > 0 ? (summary.spentThisWeek / summary.weeklyAllowance) * 100 : 0;
 

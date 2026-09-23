@@ -75,24 +75,41 @@ export function groupLabel(isoDate: string): 'Today' | 'Yesterday' | 'This Week'
   return 'Earlier';
 }
 
+/**
+ * Advances by whole Gregorian months, clamping to the target month's last
+ * valid day instead of letting native `Date` overflow into the month after
+ * (e.g. Jan 31 + 1 month lands on Feb 28/29, never silently rolls to Mar 2/3).
+ */
+export function addMonthsClamped(iso: string, count: number): string {
+  const d = new Date(iso + 'T00:00:00');
+  const day = d.getDate();
+  const targetMonthFirst = new Date(d.getFullYear(), d.getMonth() + count, 1);
+  const daysInTargetMonth = new Date(targetMonthFirst.getFullYear(), targetMonthFirst.getMonth() + 1, 0).getDate();
+  targetMonthFirst.setDate(Math.min(day, daysInTargetMonth));
+  return toISODate(targetMonthFirst);
+}
+
+/** Same clamping rule as {@link addMonthsClamped}, for whole-year steps (handles Feb 29 on a non-leap target year). */
+export function addYearsClamped(iso: string, count: number): string {
+  const d = new Date(iso + 'T00:00:00');
+  const targetYear = d.getFullYear() + count;
+  const daysInTargetMonth = new Date(targetYear, d.getMonth() + 1, 0).getDate();
+  const day = Math.min(d.getDate(), daysInTargetMonth);
+  return toISODate(new Date(targetYear, d.getMonth(), day));
+}
+
 export function nextOccurrence(
   from: string,
   frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
 ): string {
-  const d = new Date(from + 'T00:00:00');
   switch (frequency) {
     case 'daily':
-      d.setDate(d.getDate() + 1);
-      break;
+      return addDays(from, 1);
     case 'weekly':
-      d.setDate(d.getDate() + 7);
-      break;
+      return addDays(from, 7);
     case 'monthly':
-      d.setMonth(d.getMonth() + 1);
-      break;
+      return addMonthsClamped(from, 1);
     case 'yearly':
-      d.setFullYear(d.getFullYear() + 1);
-      break;
+      return addYearsClamped(from, 1);
   }
-  return toISODate(d);
 }

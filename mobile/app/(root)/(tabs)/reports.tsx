@@ -25,7 +25,7 @@ import {
   type ReportPeriod,
 } from '../../../src/services/calculations';
 import { addMonths, MONTH_NAMES, todayISO } from '../../../src/utils/date';
-import { formatBsDate, formatBsMonthYear, getMonthGrid, shiftMonth, type MonthGridCell } from '../../../src/utils/bsDate';
+import { adIsoToBs, formatBsDate, formatBsMonthYear, getMonthGrid, shiftMonth, shiftYear, type MonthGridCell } from '../../../src/utils/bsDate';
 import type { DateSystem } from '../../../src/types';
 import { spacing, radius } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
@@ -50,7 +50,7 @@ const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 function formatRangeLabel(period: ReportPeriod, range: DateRange, dateSystem: DateSystem): string {
   const start = new Date(range.start + 'T00:00:00');
   const end = new Date(range.end + 'T00:00:00');
-  if (period === 'year') return String(start.getFullYear());
+  if (period === 'year') return dateSystem === 'BS' ? String(adIsoToBs(range.start).year) : String(start.getFullYear());
   if (period === 'quarter') return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
   if (period === 'month') {
     return dateSystem === 'BS'
@@ -134,10 +134,10 @@ export default function ReportsScreen() {
   const categoryColor = (id: string) => categories.find((c) => c.id === id)?.color ?? colors.textLight;
 
   const range = useMemo(
-    () => getPeriodRange(period, periodAnchor, customRange ?? undefined),
-    [period, periodAnchor, customRange]
+    () => getPeriodRange(period, periodAnchor, customRange ?? undefined, dateSystem),
+    [period, periodAnchor, customRange, dateSystem]
   );
-  const prevRange = useMemo(() => getPreviousPeriodRange(period, range), [period, range]);
+  const prevRange = useMemo(() => getPreviousPeriodRange(period, range, dateSystem), [period, range, dateSystem]);
   const lastYearRange = useMemo(() => getSameRangeLastYear(range), [range]);
 
   const rangeTx = useMemo(() => filterByRange(transactions, range), [transactions, range]);
@@ -195,9 +195,10 @@ export default function ReportsScreen() {
         d.setDate(d.getDate() + 7 * dir);
         return d;
       }
+      // Quarters have no BS equivalent in this product, so they stay Gregorian in both modes.
       if (period === 'quarter') return addMonths(prev, 3 * dir);
-      if (period === 'year') return new Date(prev.getFullYear() + dir, prev.getMonth(), 1);
-      return addMonths(prev, dir);
+      if (period === 'year') return shiftYear(prev, dir, dateSystem);
+      return shiftMonth(prev, dir, dateSystem);
     });
   };
 

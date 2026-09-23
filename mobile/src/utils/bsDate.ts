@@ -1,5 +1,5 @@
 import DateConverter from '@remotemerge/nepali-date-converter';
-import { addDays, addMonths, daysBetween, formatFriendlyDate, MONTH_NAMES, toISODate } from './date';
+import { addDays, addMonths, daysBetween, formatFriendlyDate, MONTH_NAMES, nextOccurrence, toISODate } from './date';
 import type { DateSystem } from '../types';
 
 export const BS_MONTH_NAMES = [
@@ -118,4 +118,80 @@ export function getMonthGrid(anchor: Date, dateSystem: DateSystem): { label: str
 
 export function shiftMonth(anchor: Date, delta: number, dateSystem: DateSystem): Date {
   return dateSystem === 'BS' ? shiftBsMonth(anchor, delta) : addMonths(anchor, delta);
+}
+
+export interface BsYearInfo {
+  year: number;
+  firstDayAdIso: string; // Baishakh 1
+  lastDayAdIso: string; // Chaitra end (the day before the next BS year's Baishakh 1)
+}
+
+/**
+ * A BS calendar year's Gregorian boundaries. BS years do not align with
+ * Jan-Dec (e.g. BS 2083 runs mid-April 2026 to mid-April 2027), so this is
+ * derived from real BS→AD conversions rather than assumed.
+ */
+export function getBsYearInfo(anchor: Date): BsYearInfo {
+  const bs = adIsoToBs(toISODate(anchor));
+  const firstDayAdIso = bsToAdIso(bs.year, 1, 1);
+  const nextYearFirstDayAdIso = bsToAdIso(bs.year + 1, 1, 1);
+  return { year: bs.year, firstDayAdIso, lastDayAdIso: addDays(nextYearFirstDayAdIso, -1) };
+}
+
+/** Moves the anchor by `delta` whole BS years, landing on Poush 15 (mid-year) to avoid edge-of-year rollover surprises. */
+export function shiftBsYear(anchor: Date, delta: number): Date {
+  const bs = adIsoToBs(toISODate(anchor));
+  return new Date(bsToAdIso(bs.year + delta, 9, 15) + 'T00:00:00');
+}
+
+export function shiftYear(anchor: Date, delta: number, dateSystem: DateSystem): Date {
+  if (dateSystem === 'BS') return shiftBsYear(anchor, delta);
+  return new Date(anchor.getFullYear() + delta, anchor.getMonth(), anchor.getDate());
+}
+
+/**
+ * Advances a BS date by whole BS months, clamping to the target BS month's
+ * actual length (29-32 days) instead of overflowing into the next month —
+ * the BS equivalent of {@link addMonthsClamped} in date.ts.
+ */
+export function addBsMonthsClamped(iso: string, count: number): string {
+  const bs = adIsoToBs(iso);
+  let month = bs.month + count;
+  let year = bs.year;
+  while (month > 12) {
+    month -= 12;
+    year += 1;
+  }
+  while (month < 1) {
+    month += 12;
+    year -= 1;
+  }
+  const info = getBsMonthInfo(new Date(bsToAdIso(year, month, 1) + 'T00:00:00'));
+  const day = Math.min(bs.date, info.daysInMonth);
+  return bsToAdIso(year, month, day);
+}
+
+/** Same clamping rule as {@link addBsMonthsClamped}, for whole BS-year steps. */
+export function addBsYearsClamped(iso: string, count: number): string {
+  const bs = adIsoToBs(iso);
+  const year = bs.year + count;
+  const info = getBsMonthInfo(new Date(bsToAdIso(year, bs.month, 1) + 'T00:00:00'));
+  const day = Math.min(bs.date, info.daysInMonth);
+  return bsToAdIso(year, bs.month, day);
+}
+
+/**
+ * Calendar-aware recurrence: daily/weekly are identical in both systems
+ * (a fixed day count), but monthly/yearly must advance by BS months when the
+ * recurrence is meant to follow the Nepali calendar rather than Gregorian.
+ */
+export function nextOccurrenceForSystem(
+  from: string,
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly',
+  dateSystem: DateSystem
+): string {
+  if (dateSystem === 'AD' || frequency === 'daily' || frequency === 'weekly') {
+    return nextOccurrence(from, frequency);
+  }
+  return frequency === 'monthly' ? addBsMonthsClamped(from, 1) : addBsYearsClamped(from, 1);
 }

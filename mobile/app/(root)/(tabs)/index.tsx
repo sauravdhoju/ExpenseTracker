@@ -4,12 +4,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
 import {
   filterByMonth,
   getCategorySpending,
   getCurrentStreak,
   getDailyAverage,
+  getDayOfMonth,
   getForgottenSummary,
   getLoanSummary,
   getLongestStreak,
@@ -21,7 +23,8 @@ import {
   trackedDatesSet,
 } from '../../../src/services/calculations';
 import { generateInsights } from '../../../src/services/insightService';
-import { addMonths, MONTH_NAMES } from '../../../src/utils/date';
+import { MONTH_NAMES } from '../../../src/utils/date';
+import { shiftMonth } from '../../../src/utils/bsDate';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import PageHeader from '../../../src/components/ui/PageHeader';
@@ -46,6 +49,7 @@ function getGreeting(): string {
 export default function DashboardScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { dateSystem } = useDateFormat();
   const router = useRouter();
 
   const accounts = useAppStore((s) => s.accounts);
@@ -64,12 +68,12 @@ export default function DashboardScreen() {
 
   const now = useMemo(() => new Date(), []);
   const monthTransactions = useMemo(
-    () => filterByMonth(transactions, now),
-    [transactions, now]
+    () => filterByMonth(transactions, now, dateSystem),
+    [transactions, now, dateSystem]
   );
   const previousMonthTransactions = useMemo(
-    () => filterByMonth(transactions, addMonths(now, -1)),
-    [transactions, now]
+    () => filterByMonth(transactions, shiftMonth(now, -1, dateSystem), dateSystem),
+    [transactions, now, dateSystem]
   );
 
   const balance = getTotalBalance(accounts);
@@ -77,7 +81,7 @@ export default function DashboardScreen() {
   const expenses = getTotalExpenses(monthTransactions);
   const previousExpenses = getTotalExpenses(previousMonthTransactions);
   const comparison = getMonthlyComparison(expenses, previousExpenses);
-  const dayOfMonth = now.getDate();
+  const dayOfMonth = getDayOfMonth(now, dateSystem);
   const dailyAverage = getDailyAverage(monthTransactions, dayOfMonth);
 
   const insights = useMemo(

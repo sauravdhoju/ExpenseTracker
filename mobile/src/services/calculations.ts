@@ -2,6 +2,7 @@ import type {
   Account,
   Budget,
   DailyTracking,
+  DateSystem,
   ForgottenEntry,
   ForgottenStatus,
   Goal,
@@ -11,14 +12,34 @@ import type {
   Transaction,
 } from '../types';
 import { addDays, daysBetween, isSameDay, isSameWeek, monthKey, startOfWeek, toISODate, todayISO } from '../utils/date';
+import { getBsMonthInfo, getBsYearInfo, shiftMonth, shiftYear } from '../utils/bsDate';
 
 export function getTotalBalance(accounts: Account[]): number {
   return accounts.filter((a) => a.isActive).reduce((sum, a) => sum + a.balance, 0);
 }
 
-export function filterByMonth(transactions: Transaction[], date: Date): Transaction[] {
+/**
+ * Filters to the calendar month containing `date`. In BS mode this is the
+ * actual BS month's Gregorian span (e.g. Ashwin = Sep 17-Oct 17), not the
+ * Gregorian month `date` happens to fall in.
+ */
+export function filterByMonth(transactions: Transaction[], date: Date, dateSystem: DateSystem = 'AD'): Transaction[] {
+  if (dateSystem === 'BS') {
+    const info = getBsMonthInfo(date);
+    const endIso = addDays(info.firstDayAdIso, info.daysInMonth - 1);
+    return transactions.filter((t) => t.date >= info.firstDayAdIso && t.date <= endIso);
+  }
   const key = monthKey(date);
   return transactions.filter((t) => t.date.slice(0, 7) === key);
+}
+
+/** 1-indexed day-of-month position of `date` within its calendar month (AD or BS). */
+export function getDayOfMonth(date: Date, dateSystem: DateSystem = 'AD'): number {
+  if (dateSystem === 'BS') {
+    const info = getBsMonthInfo(date);
+    return daysBetween(info.firstDayAdIso, toISODate(date)) + 1;
+  }
+  return date.getDate();
 }
 
 export function filterByWeek(transactions: Transaction[], date: Date): Transaction[] {
@@ -377,14 +398,16 @@ export interface BudgetEngineSummary {
 export function getBudgetEngineSummary(
   monthlyBudget: number,
   transactions: Transaction[],
-  now: Date
+  now: Date,
+  dateSystem: DateSystem = 'AD'
 ): BudgetEngineSummary {
-  const monthTransactions = filterByMonth(transactions, now);
+  const monthTransactions = filterByMonth(transactions, now, dateSystem);
   const spentThisMonth = getTotalExpenses(monthTransactions);
   const remainingThisMonth = monthlyBudget - spentThisMonth;
 
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const daysRemainingInMonth = daysInMonth - now.getDate() + 1;
+  const daysInMonth =
+    dateSystem === 'BS' ? getBsMonthInfo(now).daysInMonth : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysRemainingInMonth = daysInMonth - getDayOfMonth(now, dateSystem) + 1;
 
   const dailyAllowance =
     daysRemainingInMonth > 0 ? Math.max(remainingThisMonth, 0) / daysRemainingInMonth : 0;
@@ -439,8 +462,21 @@ function endOfYear(date: Date): Date {
   return new Date(date.getFullYear(), 11, 31);
 }
 
-export function getPeriodRange(period: ReportPeriod, referenceDate: Date, custom?: DateRange): DateRange {
-  if (period === 'custom') return custom ?? getPeriodRange('month', referenceDate);
+/**
+ * `dateSystem` only changes 'month' and 'year': BS months/years don't align
+ * with Gregorian ones (e.g. Ashwin = Sep 17-Oct 17), so those two periods are
+ * resolved against real BS boundaries. Week is a fixed 7-day span and
+ * quarter has no BS equivalent in this product, so both stay Gregorian
+ * regardless of `dateSystem`. The returned range is always canonical
+ * Gregorian ISO, since that's how transactions are stored.
+ */
+export function getPeriodRange(
+  period: ReportPeriod,
+  referenceDate: Date,
+  custom?: DateRange,
+  dateSystem: DateSystem = 'AD'
+): DateRange {
+  if (period === 'custom') return custom ?? getPeriodRange('month', referenceDate, undefined, dateSystem);
   if (period === 'week') {
     const start = startOfWeek(referenceDate);
     const end = new Date(start);
@@ -451,17 +487,25 @@ export function getPeriodRange(period: ReportPeriod, referenceDate: Date, custom
     return { start: toISODate(startOfQuarter(referenceDate)), end: toISODate(endOfQuarter(referenceDate)) };
   }
   if (period === 'year') {
+    if (dateSystem === 'BS') {
+      const info = getBsYearInfo(referenceDate);
+      return { start: info.firstDayAdIso, end: info.lastDayAdIso };
+    }
     return { start: toISODate(startOfYear(referenceDate)), end: toISODate(endOfYear(referenceDate)) };
+  }
+  if (dateSystem === 'BS') {
+    const info = getBsMonthInfo(referenceDate);
+    return { start: info.firstDayAdIso, end: addDays(info.firstDayAdIso, info.daysInMonth - 1) };
   }
   return { start: toISODate(startOfMonth(referenceDate)), end: toISODate(endOfMonth(referenceDate)) };
 }
 
 /** The equivalent immediately-preceding period, used to drive auto-comparison deltas. */
-export function getPreviousPeriodRange(period: ReportPeriod, range: DateRange): DateRange {
+export function getPreviousPeriodRange(period: ReportPeriod, range: DateRange, dateSystem: DateSystem = 'AD'): DateRange {
   const start = new Date(range.start + 'T00:00:00');
-  if (period === 'month') return getPeriodRange('month', new Date(start.getFullYear(), start.getMonth() - 1, 1));
+  if (period === 'month') return getPeriodRange('month', shiftMonth(start, -1, dateSystem), undefined, dateSystem);
   if (period === 'quarter') return getPeriodRange('quarter', new Date(start.getFullYear(), start.getMonth() - 3, 1));
-  if (period === 'year') return getPeriodRange('year', new Date(start.getFullYear() - 1, start.getMonth(), 1));
+  if (period === 'year') return getPeriodRange('year', shiftYear(start, -1, dateSystem), undefined, dateSystem);
 
   // week / custom: shift back by the range's exact day-length
   const end = new Date(range.end + 'T00:00:00');

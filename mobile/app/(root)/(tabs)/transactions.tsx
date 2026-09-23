@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
+import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
 import {
   filterByDay,
@@ -38,6 +39,7 @@ const DATE_RANGES: { value: DateRange; label: string }[] = [
 export default function TransactionsScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
+  const { dateSystem } = useDateFormat();
   const params = useLocalSearchParams<{ type?: string; categoryId?: string; accountId?: string }>();
 
   const transactions = useAppStore((s) => s.transactions);
@@ -62,12 +64,12 @@ export default function TransactionsScreen() {
     const now = new Date();
     if (dateRange === 'today') return filterByDay(transactions, now);
     if (dateRange === 'week') return filterByWeek(transactions, now);
-    if (dateRange === 'month') return filterByMonth(transactions, now);
+    if (dateRange === 'month') return filterByMonth(transactions, now, dateSystem);
     if (dateRange === 'custom') {
       return transactions.filter((t) => t.date >= customStart && t.date <= customEnd);
     }
     return transactions;
-  }, [transactions, dateRange, customStart, customEnd]);
+  }, [transactions, dateRange, customStart, customEnd, dateSystem]);
 
   const filtered = useMemo(() => {
     let result: Transaction[] = dateFiltered;
