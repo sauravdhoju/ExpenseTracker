@@ -26,14 +26,27 @@ import type { RecurringFrequency } from '../../../src/types';
 // transactions are created via the Lent Money flow so their linked loan stays in sync.
 type ManualTransactionType = 'expense' | 'income' | 'transfer';
 
-const FREQUENCIES: RecurringFrequency[] = ['daily', 'weekly', 'monthly', 'yearly'];
-const TRANSACTION_TYPES: ManualTransactionType[] = ['expense', 'income', 'transfer'];
+const FREQUENCIES: RecurringFrequency[] = [
+  'daily',
+  'weekly',
+  'monthly',
+  'yearly',
+];
+const TRANSACTION_TYPES: ManualTransactionType[] = [
+  'expense',
+  'income',
+  'transfer',
+];
 
 export default function NewTransactionScreen() {
   const colors = useThemeColors();
   const router = useRouter();
 
-  const params = useLocalSearchParams<{ type?: string; categoryId?: string; date?: string }>();
+  const params = useLocalSearchParams<{
+    type?: string;
+    categoryId?: string;
+    date?: string;
+  }>();
   const initialType = (params.type as ManualTransactionType) ?? 'expense';
 
   const accounts = useAppStore((s) => s.accounts);
@@ -45,9 +58,15 @@ export default function NewTransactionScreen() {
 
   const [type, setType] = useState<ManualTransactionType>(initialType);
   const [amount, setAmount] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(params.categoryId ?? null);
-  const [accountId, setAccountId] = useState<string | null>(accounts[0]?.id ?? null);
-  const [toAccountId, setToAccountId] = useState<string | null>(accounts[1]?.id ?? accounts[0]?.id ?? null);
+  const [categoryId, setCategoryId] = useState<string | null>(
+    params.categoryId ?? null
+  );
+  const [accountId, setAccountId] = useState<string | null>(
+    accounts[0]?.id ?? null
+  );
+  const [toAccountId, setToAccountId] = useState<string | null>(
+    accounts[1]?.id ?? accounts[0]?.id ?? null
+  );
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(params.date ?? todayISO());
@@ -57,12 +76,19 @@ export default function NewTransactionScreen() {
   const [notesOpen, setNotesOpen] = useState(false);
 
   const relevantCategories = useMemo(
-    () => categories.filter((c) => c.kind === (type === 'income' ? 'income' : 'expense')),
+    () =>
+      categories.filter(
+        (c) => c.kind === (type === 'income' ? 'income' : 'expense')
+      ),
     [categories, type]
   );
 
   const accentColor =
-    type === 'income' ? colors.income : type === 'expense' ? colors.expense : colors.primary;
+    type === 'income'
+      ? colors.income
+      : type === 'expense'
+        ? colors.expense
+        : colors.primary;
 
   const canSave =
     parseFloat(amount) > 0 &&
@@ -172,7 +198,11 @@ export default function NewTransactionScreen() {
       <Ionicons name={icon} size={13} color={active ? '#FFF' : activeColor} />
       <Text
         numberOfLines={1}
-        style={{ fontSize: 12.5, fontWeight: '600', color: active ? '#FFF' : colors.text }}
+        style={{
+          fontSize: 12.5,
+          fontWeight: '600',
+          color: active ? '#FFF' : colors.text,
+        }}
       >
         {label}
       </Text>
@@ -210,9 +240,15 @@ export default function NewTransactionScreen() {
           <Ionicons name="close" size={20} color={colors.text} />
         </TouchableOpacity>
 
-        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>New Transaction</Text>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
+          New Transaction
+        </Text>
 
-        <TouchableOpacity onPress={handleSave} disabled={!canSave || isSaving} hitSlop={10}>
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={!canSave || isSaving}
+          hitSlop={10}
+        >
           <Text
             style={{
               fontSize: 15,
@@ -229,7 +265,10 @@ export default function NewTransactionScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingBottom: spacing.lg,
+        }}
       >
         {/* Type selector */}
         <View
@@ -244,7 +283,11 @@ export default function NewTransactionScreen() {
           {TRANSACTION_TYPES.map((item) => {
             const active = type === item;
             const itemColor =
-              item === 'income' ? colors.income : item === 'expense' ? colors.expense : colors.primary;
+              item === 'income'
+                ? colors.income
+                : item === 'expense'
+                  ? colors.expense
+                  : colors.primary;
 
             return (
               <TouchableOpacity
@@ -286,8 +329,21 @@ export default function NewTransactionScreen() {
             marginBottom: spacing.md,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 26, fontWeight: '700', color: accentColor, marginRight: 4 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 26,
+                fontWeight: '700',
+                color: accentColor,
+                marginRight: 4,
+              }}
+            >
               {currencySymbol}
             </Text>
             <TextInput
@@ -319,9 +375,18 @@ export default function NewTransactionScreen() {
           <TextInput
             value={title}
             onChangeText={setTitle}
-            placeholder={type === 'transfer' ? 'Transfer note (optional)' : 'What was this for?'}
+            placeholder={
+              type === 'transfer'
+                ? 'Transfer note (optional)'
+                : 'What was this for?'
+            }
             placeholderTextColor={colors.textLight}
-            style={{ fontSize: 15, fontWeight: '500', color: colors.text, padding: 0 }}
+            style={{
+              fontSize: 15,
+              fontWeight: '500',
+              color: colors.text,
+              padding: 0,
+            }}
           />
         </View>
 
@@ -352,7 +417,9 @@ export default function NewTransactionScreen() {
               >
                 <Text style={sectionLabelStyle}>Category</Text>
                 {selectedCategory && (
-                  <Text style={{ fontSize: 11, color: colors.textLight }}>{selectedCategory.name}</Text>
+                  <Text style={{ fontSize: 11, color: colors.textLight }}>
+                    {selectedCategory.name}
+                  </Text>
                 )}
               </View>
               <ScrollView
@@ -384,7 +451,11 @@ export default function NewTransactionScreen() {
             <Text style={[sectionLabelStyle, { marginBottom: spacing.sm }]}>
               {type === 'transfer' ? 'From account' : 'Account'}
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+            >
               {accounts.map((account) =>
                 chip(
                   account.id,
@@ -405,8 +476,14 @@ export default function NewTransactionScreen() {
                 borderBottomColor: colors.border,
               }}
             >
-              <Text style={[sectionLabelStyle, { marginBottom: spacing.sm }]}>To account</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              <Text style={[sectionLabelStyle, { marginBottom: spacing.sm }]}>
+                To account
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
                 {accounts
                   .filter((a) => a.id !== accountId)
                   .map((account) =>
@@ -456,9 +533,18 @@ export default function NewTransactionScreen() {
               }}
             >
               <Text style={sectionLabelStyle}>Notes</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+              >
                 {!notesOpen && notes.trim().length > 0 && (
-                  <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textLight, maxWidth: 140 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 12,
+                      color: colors.textLight,
+                      maxWidth: 140,
+                    }}
+                  >
                     {notes.trim()}
                   </Text>
                 )}
@@ -498,9 +584,23 @@ export default function NewTransactionScreen() {
                 borderTopColor: colors.border,
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                }}
+              >
                 <Ionicons name="repeat" size={16} color={colors.primary} />
-                <Text style={{ fontSize: 13.5, fontWeight: '600', color: colors.text }}>Repeat</Text>
+                <Text
+                  style={{
+                    fontSize: 13.5,
+                    fontWeight: '600',
+                    color: colors.text,
+                  }}
+                >
+                  Repeat
+                </Text>
               </View>
               <Ionicons
                 name={isRecurring ? 'checkmark-circle' : 'ellipse-outline'}
@@ -519,7 +619,13 @@ export default function NewTransactionScreen() {
                 }}
               >
                 {FREQUENCIES.map((f) =>
-                  chip(f, frequency === f, () => setFrequency(f), 'time-outline', f)
+                  chip(
+                    f,
+                    frequency === f,
+                    () => setFrequency(f),
+                    'time-outline',
+                    f
+                  )
                 )}
               </View>
             )}
@@ -538,7 +644,9 @@ export default function NewTransactionScreen() {
         }}
       >
         <Button
-          label={isRecurring ? 'Create Recurring Transaction' : 'Save Transaction'}
+          label={
+            isRecurring ? 'Create Recurring Transaction' : 'Save Transaction'
+          }
           onPress={handleSave}
           disabled={!canSave}
           loading={isSaving}

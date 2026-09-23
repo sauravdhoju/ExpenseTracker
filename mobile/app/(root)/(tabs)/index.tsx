@@ -23,8 +23,8 @@ import {
   trackedDatesSet,
 } from '../../../src/services/calculations';
 import { generateInsights } from '../../../src/services/insightService';
-import { MONTH_NAMES } from '../../../src/utils/date';
-import { shiftMonth } from '../../../src/utils/bsDate';
+import { MONTH_NAMES, toISODate } from '../../../src/utils/date';
+import { formatBsDate, shiftMonth } from '../../../src/utils/bsDate';
 import { spacing } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import PageHeader from '../../../src/components/ui/PageHeader';
@@ -127,7 +127,11 @@ export default function DashboardScreen() {
     >
       <PageHeader
         title={`${getGreeting()}`}
-        subtitle={`${MONTH_NAMES[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`}
+        subtitle={
+          dateSystem === 'BS'
+            ? formatBsDate(toISODate(now))
+            : `${MONTH_NAMES[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`
+        }
         actions={[
           { icon: 'search-outline', onPress: () => router.push('/search') },
           {

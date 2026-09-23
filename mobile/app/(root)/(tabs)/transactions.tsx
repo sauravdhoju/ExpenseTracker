@@ -13,7 +13,8 @@ import {
   getMonthlyStatement,
 } from '../../../src/services/calculations';
 import { exportStatementAsCSV } from '../../../src/services/exportService';
-import { addMonths, groupLabel, MONTH_NAMES, todayISO } from '../../../src/utils/date';
+import { groupLabel, todayISO } from '../../../src/utils/date';
+import { shiftMonth } from '../../../src/utils/bsDate';
 import { spacing, radius } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import PageHeader from '../../../src/components/ui/PageHeader';
@@ -39,7 +40,7 @@ const DATE_RANGES: { value: DateRange; label: string }[] = [
 export default function TransactionsScreen() {
   const colors = useThemeColors();
   const { format } = useCurrency();
-  const { dateSystem } = useDateFormat();
+  const { dateSystem, formatMonthYear } = useDateFormat();
   const params = useLocalSearchParams<{ type?: string; categoryId?: string; accountId?: string }>();
 
   const transactions = useAppStore((s) => s.transactions);
@@ -127,8 +128,8 @@ export default function TransactionsScreen() {
   );
 
   const statement = useMemo(
-    () => getMonthlyStatement(transactions, accounts, statementMonth),
-    [transactions, accounts, statementMonth]
+    () => getMonthlyStatement(transactions, accounts, statementMonth, dateSystem),
+    [transactions, accounts, statementMonth, dateSystem]
   );
 
   const activeFilterCount =
@@ -185,13 +186,13 @@ export default function TransactionsScreen() {
       {statementOpen && (
         <Card style={{ marginBottom: spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
-            <TouchableOpacity onPress={() => setStatementMonth((d) => addMonths(d, -1))} hitSlop={8}>
+            <TouchableOpacity onPress={() => setStatementMonth((d) => shiftMonth(d, -1, dateSystem))} hitSlop={8}>
               <Ionicons name="chevron-back" size={18} color={colors.text} />
             </TouchableOpacity>
             <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>
-              {MONTH_NAMES[statementMonth.getMonth()]} {statementMonth.getFullYear()}
+              {formatMonthYear(statementMonth)}
             </Text>
-            <TouchableOpacity onPress={() => setStatementMonth((d) => addMonths(d, 1))} hitSlop={8}>
+            <TouchableOpacity onPress={() => setStatementMonth((d) => shiftMonth(d, 1, dateSystem))} hitSlop={8}>
               <Ionicons name="chevron-forward" size={18} color={colors.text} />
             </TouchableOpacity>
           </View>

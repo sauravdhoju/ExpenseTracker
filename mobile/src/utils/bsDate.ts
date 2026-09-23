@@ -1,5 +1,13 @@
 import DateConverter from '@remotemerge/nepali-date-converter';
-import { addDays, addMonths, daysBetween, formatFriendlyDate, MONTH_NAMES, nextOccurrence, toISODate } from './date';
+import {
+  addDays,
+  addMonths,
+  daysBetween,
+  formatFriendlyDate,
+  MONTH_NAMES,
+  nextOccurrence,
+  toISODate,
+} from './date';
 import type { DateSystem } from '../types';
 
 export const BS_MONTH_NAMES = [
@@ -8,7 +16,7 @@ export const BS_MONTH_NAMES = [
   'Ashadh',
   'Shrawan',
   'Bhadra',
-  'Ashwin',
+  'Asoj',
   'Kartik',
   'Mangsir',
   'Poush',
@@ -66,7 +74,10 @@ export interface BsMonthInfo {
 export function getBsMonthInfo(anchor: Date): BsMonthInfo {
   const bs = adIsoToBs(toISODate(anchor));
   const firstDayAdIso = bsToAdIso(bs.year, bs.month, 1);
-  const nextMonth = bs.month === 12 ? { year: bs.year + 1, month: 1 } : { year: bs.year, month: bs.month + 1 };
+  const nextMonth =
+    bs.month === 12
+      ? { year: bs.year + 1, month: 1 }
+      : { year: bs.year, month: bs.month + 1 };
   const nextFirstDayAdIso = bsToAdIso(nextMonth.year, nextMonth.month, 1);
   const daysInMonth = daysBetween(firstDayAdIso, nextFirstDayAdIso);
   return { year: bs.year, month: bs.month, daysInMonth, firstDayAdIso };
@@ -94,10 +105,14 @@ export interface MonthGridCell {
 }
 
 /** A month's calendar grid in the given system: a display label plus one cell (or null for a leading blank) per weekday slot. */
-export function getMonthGrid(anchor: Date, dateSystem: DateSystem): { label: string; cells: (MonthGridCell | null)[] } {
+export function getMonthGrid(
+  anchor: Date,
+  dateSystem: DateSystem
+): { label: string; cells: (MonthGridCell | null)[] } {
   if (dateSystem === 'BS') {
     const info = getBsMonthInfo(anchor);
-    const leadingBlanks = (new Date(info.firstDayAdIso + 'T00:00:00').getDay() + 6) % 7;
+    const leadingBlanks =
+      (new Date(info.firstDayAdIso + 'T00:00:00').getDay() + 6) % 7;
     const cells: (MonthGridCell | null)[] = Array(leadingBlanks).fill(null);
     for (let d = 0; d < info.daysInMonth; d++) {
       cells.push({ adIso: addDays(info.firstDayAdIso, d), dayNumber: d + 1 });
@@ -111,13 +126,22 @@ export function getMonthGrid(anchor: Date, dateSystem: DateSystem): { label: str
   const leadingBlanks = (new Date(year, month, 1).getDay() + 6) % 7;
   const cells: (MonthGridCell | null)[] = Array(leadingBlanks).fill(null);
   for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ adIso: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`, dayNumber: d });
+    cells.push({
+      adIso: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+      dayNumber: d,
+    });
   }
   return { label: `${MONTH_NAMES[month]} ${year}`, cells };
 }
 
-export function shiftMonth(anchor: Date, delta: number, dateSystem: DateSystem): Date {
-  return dateSystem === 'BS' ? shiftBsMonth(anchor, delta) : addMonths(anchor, delta);
+export function shiftMonth(
+  anchor: Date,
+  delta: number,
+  dateSystem: DateSystem
+): Date {
+  return dateSystem === 'BS'
+    ? shiftBsMonth(anchor, delta)
+    : addMonths(anchor, delta);
 }
 
 export interface BsYearInfo {
@@ -135,7 +159,11 @@ export function getBsYearInfo(anchor: Date): BsYearInfo {
   const bs = adIsoToBs(toISODate(anchor));
   const firstDayAdIso = bsToAdIso(bs.year, 1, 1);
   const nextYearFirstDayAdIso = bsToAdIso(bs.year + 1, 1, 1);
-  return { year: bs.year, firstDayAdIso, lastDayAdIso: addDays(nextYearFirstDayAdIso, -1) };
+  return {
+    year: bs.year,
+    firstDayAdIso,
+    lastDayAdIso: addDays(nextYearFirstDayAdIso, -1),
+  };
 }
 
 /** Moves the anchor by `delta` whole BS years, landing on Poush 15 (mid-year) to avoid edge-of-year rollover surprises. */
@@ -144,9 +172,17 @@ export function shiftBsYear(anchor: Date, delta: number): Date {
   return new Date(bsToAdIso(bs.year + delta, 9, 15) + 'T00:00:00');
 }
 
-export function shiftYear(anchor: Date, delta: number, dateSystem: DateSystem): Date {
+export function shiftYear(
+  anchor: Date,
+  delta: number,
+  dateSystem: DateSystem
+): Date {
   if (dateSystem === 'BS') return shiftBsYear(anchor, delta);
-  return new Date(anchor.getFullYear() + delta, anchor.getMonth(), anchor.getDate());
+  return new Date(
+    anchor.getFullYear() + delta,
+    anchor.getMonth(),
+    anchor.getDate()
+  );
 }
 
 /**
@@ -166,7 +202,9 @@ export function addBsMonthsClamped(iso: string, count: number): string {
     month += 12;
     year -= 1;
   }
-  const info = getBsMonthInfo(new Date(bsToAdIso(year, month, 1) + 'T00:00:00'));
+  const info = getBsMonthInfo(
+    new Date(bsToAdIso(year, month, 1) + 'T00:00:00')
+  );
   const day = Math.min(bs.date, info.daysInMonth);
   return bsToAdIso(year, month, day);
 }
@@ -175,7 +213,9 @@ export function addBsMonthsClamped(iso: string, count: number): string {
 export function addBsYearsClamped(iso: string, count: number): string {
   const bs = adIsoToBs(iso);
   const year = bs.year + count;
-  const info = getBsMonthInfo(new Date(bsToAdIso(year, bs.month, 1) + 'T00:00:00'));
+  const info = getBsMonthInfo(
+    new Date(bsToAdIso(year, bs.month, 1) + 'T00:00:00')
+  );
   const day = Math.min(bs.date, info.daysInMonth);
   return bsToAdIso(year, bs.month, day);
 }
@@ -193,5 +233,7 @@ export function nextOccurrenceForSystem(
   if (dateSystem === 'AD' || frequency === 'daily' || frequency === 'weekly') {
     return nextOccurrence(from, frequency);
   }
-  return frequency === 'monthly' ? addBsMonthsClamped(from, 1) : addBsYearsClamped(from, 1);
+  return frequency === 'monthly'
+    ? addBsMonthsClamped(from, 1)
+    : addBsYearsClamped(from, 1);
 }

@@ -294,12 +294,12 @@ function netTransactionEffect(transactions: Transaction[]): number {
 export function getMonthlyStatement(
   transactions: Transaction[],
   accounts: Account[],
-  monthDate: Date
+  monthDate: Date,
+  dateSystem: DateSystem = 'AD'
 ): MonthlyStatement {
-  const key = monthKey(monthDate);
-  const monthStart = `${key}-01`;
+  const monthStart = dateSystem === 'BS' ? getBsMonthInfo(monthDate).firstDayAdIso : `${monthKey(monthDate)}-01`;
   const priorTransactions = transactions.filter((t) => t.date < monthStart);
-  const monthTransactions = transactions.filter((t) => t.date.slice(0, 7) === key);
+  const monthTransactions = filterByMonth(transactions, monthDate, dateSystem);
 
   const startingBalance = accounts.filter((a) => a.isActive).reduce((sum, a) => sum + a.initialBalance, 0);
   const openingBalance = startingBalance + netTransactionEffect(priorTransactions);

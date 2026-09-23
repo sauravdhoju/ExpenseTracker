@@ -409,6 +409,19 @@ describe('getMonthlyStatement', () => {
     expect(statement.repaid).toBe(2000);
     expect(statement.closingBalance).toBe(30000 + 50000 - 32450 - 5000 + 2000);
   });
+
+  it('in BS mode uses the real BS month boundary (Ashwin = Sep 17-Oct 17), not the Gregorian month', () => {
+    const accounts = [makeAccount({ id: 'acc1', initialBalance: 0 })];
+    const transactions = [
+      makeTransaction({ id: '1', type: 'income', amount: 100, date: '2026-09-16' }), // Bhadra 31 -> prior
+      makeTransaction({ id: '2', type: 'income', amount: 200, date: '2026-09-17' }), // Ashwin 1 -> in month
+      makeTransaction({ id: '3', type: 'income', amount: 300, date: '2026-10-17' }), // Ashwin 31 -> in month
+      makeTransaction({ id: '4', type: 'income', amount: 400, date: '2026-10-18' }), // Kartik 1 -> after
+    ];
+    const statement = getMonthlyStatement(transactions, accounts, new Date('2026-09-23T00:00:00'), 'BS');
+    expect(statement.income).toBe(500); // 200 + 300, not 100 (prior) or 400 (next month)
+    expect(statement.openingBalance).toBe(100); // only the Bhadra 31 transaction is prior to Ashwin 1
+  });
 });
 
 describe('getMoneyWentSummary', () => {
