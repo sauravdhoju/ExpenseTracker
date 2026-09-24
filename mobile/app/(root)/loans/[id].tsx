@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +22,10 @@ export default function LoanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const loan = useAppStore((s) => s.loans.find((l) => l.id === id));
-  const repayments = useAppStore((s) => s.repayments.filter((r) => r.loanId === id));
+  // Select the stable store array and filter outside the selector — returning a fresh array from a
+  // Zustand v5 selector triggers an infinite re-render loop that crashes the screen.
+  const allRepayments = useAppStore((s) => s.repayments);
+  const repayments = useMemo(() => allRepayments.filter((r) => r.loanId === id), [allRepayments, id]);
   const accounts = useAppStore((s) => s.accounts);
   const addRepayment = useAppStore((s) => s.addRepayment);
   const removeRepayment = useAppStore((s) => s.removeRepayment);

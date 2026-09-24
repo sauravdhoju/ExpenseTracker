@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +24,8 @@ export default function ForgottenEntryDetailScreen() {
   const resolutions = useAppStore((s) =>
     s.transactions.filter((t) => t.type === 'expense' && t.forgottenId === id)
   );
-  const categories = useAppStore((s) => s.categories.filter((c) => c.kind === 'expense'));
+  const allCategories = useAppStore((s) => s.categories);
+  const categories = useMemo(() => allCategories.filter((c) => c.kind === 'expense'), [allCategories]);
   const addForgottenResolution = useAppStore((s) => s.addForgottenResolution);
   const removeForgottenEntry = useAppStore((s) => s.removeForgottenEntry);
 
