@@ -20,7 +20,7 @@ import {
 } from '../../services/calculations';
 import { addDays, toISODate } from '../../utils/date';
 import { activityHref, ranges } from '../../utils/links';
-import { radius, spacing } from '../../constants/theme';
+import { brand, radius, spacing } from '../../constants/theme';
 import { MASK, formatCompact, splitAmount } from './money';
 
 const USUAL_DAY_WINDOW = 30;
@@ -190,8 +190,8 @@ export default function TodaySpendCard({ now }: { now: Date }) {
         borderRadius: 14,
         padding: spacing.lg,
         overflow: 'hidden',
-        backgroundColor: '#0369A1',
-        shadowColor: '#0369A1',
+        backgroundColor: brand.blue,
+        shadowColor: brand.blue,
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.24,
         shadowRadius: 14,
@@ -206,9 +206,9 @@ export default function TodaySpendCard({ now }: { now: Date }) {
         >
           <Defs>
             <LinearGradient id="heroGradient" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#0B3B5E" />
-              <Stop offset="0.55" stopColor="#0369A1" />
-              <Stop offset="1" stopColor="#0EA5E9" />
+              <Stop offset="0" stopColor={brand.blueDeep} />
+              <Stop offset="0.55" stopColor={brand.blue} />
+              <Stop offset="1" stopColor={brand.blueBright} />
             </LinearGradient>
           </Defs>
           <Rect

@@ -14,34 +14,46 @@ export interface ThemeColors {
   shadow: string;
 }
 
+/** Logo palette. Theme tokens below are derived from these; use the tokens in UI code. */
+export const brand = {
+  red: '#E11937',
+  redDeep: '#AC0C27',
+  redDark: '#74081B',
+  redLight: '#E36B7F',
+  blue: '#1157DE',
+  blueBright: '#2790EE',
+  blueLight: '#74BBED',
+  blueDeep: '#1450C8',
+};
+
 export const lightColors: ThemeColors = {
-  primary: '#0EA5E9',
-  primaryDeep: '#0369A1',
-  background: '#F1F7FB',
+  primary: brand.blue,
+  primaryDeep: brand.blueDeep,
+  background: '#F4F6FB',
   surface: '#FFFFFF',
   card: '#FFFFFF',
-  text: '#0F2A3D',
-  textLight: '#6A8299',
-  border: '#DCEAF3',
+  text: '#0E1B36',
+  textLight: '#667391',
+  border: '#E2E7F2',
   white: '#FFFFFF',
   income: '#16A34A',
-  expense: '#E1462F',
+  expense: brand.red,
   warning: '#D97706',
-  shadow: '#0B2436',
+  shadow: '#0E1B36',
 };
 
 export const darkColors: ThemeColors = {
-  primary: '#38BDF8',
-  primaryDeep: '#0EA5E9',
-  background: '#0A1622',
-  surface: '#122334',
-  card: '#122334',
-  text: '#E8F2FA',
-  textLight: '#7E96AC',
-  border: '#1E3548',
+  primary: brand.blueBright,
+  primaryDeep: brand.blueLight,
+  background: '#0B1220',
+  surface: '#141D2E',
+  card: '#141D2E',
+  text: '#EEF2FA',
+  textLight: '#8A97B0',
+  border: '#243049',
   white: '#FFFFFF',
   income: '#4ADE80',
-  expense: '#F87171',
+  expense: brand.redLight,
   warning: '#FBBF24',
   shadow: '#000000',
 };

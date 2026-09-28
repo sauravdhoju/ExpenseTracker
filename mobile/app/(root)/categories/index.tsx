@@ -16,7 +16,7 @@ import type { Category, CategoryKind } from '../../../src/types';
 
 const PALETTE = [
   '#FF7043', '#F59E0B', '#FFCA28', '#66BB6A', '#26A69A', '#42A5F5',
-  '#5C6BC0', '#AB47BC', '#EC407A', '#8D6E63', '#78909C', '#0EA5E9',
+  '#5C6BC0', '#AB47BC', '#EC407A', '#8D6E63', '#78909C', '#2790EE',
 ];
 const ICONS: (keyof typeof Ionicons.glyphMap)[] = [
   'pricetag', 'fast-food', 'restaurant', 'cafe', 'beer', 'cart', 'basket', 'shirt',

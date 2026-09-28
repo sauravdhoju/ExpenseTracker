@@ -21,7 +21,7 @@ import { radius, spacing } from '../../constants/theme';
 import DateField from '../ui/DateField';
 import Segmented from '../ui/Segmented';
 import { SectionTitle, Sheet } from '../ui/Sheet';
-import CategoryGrid from './CategoryGrid';
+import CategoryPicker from './CategoryPicker';
 import type { RecurringFrequency, TransactionType } from '../../types';
 
 export interface TransactionFormValues {
@@ -356,15 +356,13 @@ export default function TransactionForm({ mode, initial, onSubmit, onDelete }: P
         {/* Category */}
         {hasCategory && (
           <>
-            <SectionTitle title="Category" linkLabel="Manage" onLinkPress={() => router.push('/categories')} />
-            <Sheet style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.sm }}>
-              <CategoryGrid
-                kind={type === 'income' ? 'income' : 'expense'}
-                value={categoryId}
-                onChange={setCategoryId}
-                onManage={() => router.push('/categories')}
-              />
-            </Sheet>
+            <SectionTitle title="Category" />
+            <CategoryPicker
+              kind={type === 'income' ? 'income' : 'expense'}
+              value={categoryId}
+              onChange={setCategoryId}
+              onManage={() => router.push('/categories')}
+            />
           </>
         )}
 
