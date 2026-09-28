@@ -5,6 +5,7 @@ import Svg, {
   Circle,
   Defs,
   LinearGradient,
+  RadialGradient,
   Rect,
   Stop,
 } from 'react-native-svg';
@@ -26,6 +27,7 @@ import { MASK, formatCompact, splitAmount } from './money';
 const USUAL_DAY_WINDOW = 30;
 const RING_SIZE = 68;
 const RING_STROKE = 6;
+const CARD_RADIUS = 16;
 
 const WHITE = '#FFFFFF';
 const WHITE_MUTED = 'rgba(255,255,255,0.72)';
@@ -105,7 +107,12 @@ function StripStat({
     >
       <Text style={{ color: WHITE_MUTED, fontSize: 11 }}>{label}</Text>
       <Text
-        style={{ color: WHITE, fontSize: 13.5, fontWeight: '700', marginTop: 2 }}
+        style={{
+          color: WHITE,
+          fontSize: 13.5,
+          fontWeight: '700',
+          marginTop: 2,
+        }}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
@@ -177,194 +184,253 @@ export default function TodaySpendCard({ now }: { now: Date }) {
   }
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      onPress={() => router.push(activityHref({ range: ranges.today(now), type: 'expense' }))}
-      onLayout={(e) =>
-        setSize({
-          width: e.nativeEvent.layout.width,
-          height: e.nativeEvent.layout.height,
-        })
-      }
+    // Two-tone glow in the logo colours: crimson bleeds out bottom-left, blue bottom-right.
+    // Shadows live on wrappers without overflow:hidden so they aren't clipped.
+    <View
       style={{
-        borderRadius: 14,
-        padding: spacing.lg,
-        overflow: 'hidden',
+        borderRadius: CARD_RADIUS,
         backgroundColor: brand.sky,
-        shadowColor: brand.sky,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.24,
-        shadowRadius: 14,
+        shadowColor: brand.red,
+        shadowOffset: { width: -6, height: 12 },
+        shadowOpacity: 0.35,
+        shadowRadius: 18,
         elevation: 6,
       }}
     >
-      {size.width > 0 && (
-        <Svg
-          width={size.width}
-          height={size.height}
-          style={{ position: 'absolute', top: 0, left: 0 }}
+      <View
+        style={{
+          borderRadius: CARD_RADIUS,
+          backgroundColor: brand.sky,
+          shadowColor: brand.blue,
+          shadowOffset: { width: 6, height: 12 },
+          shadowOpacity: 0.4,
+          shadowRadius: 18,
+          elevation: 6,
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onPress={() =>
+            router.push(
+              activityHref({ range: ranges.today(now), type: 'expense' })
+            )
+          }
+          onLayout={(e) =>
+            setSize({
+              width: e.nativeEvent.layout.width,
+              height: e.nativeEvent.layout.height,
+            })
+          }
+          style={{
+            borderRadius: CARD_RADIUS,
+            // Fine glass edge that catches the light instead of a painted border.
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.28)',
+            padding: spacing.lg,
+            overflow: 'hidden',
+            backgroundColor: brand.sky,
+          }}
         >
-          <Defs>
-            <LinearGradient id="heroGradient" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={brand.skyDeep} />
-              <Stop offset="0.55" stopColor={brand.sky} />
-              <Stop offset="1" stopColor={brand.skySoft} />
-            </LinearGradient>
-          </Defs>
-          <Rect
-            width={size.width}
-            height={size.height}
-            fill="url(#heroGradient)"
-          />
-          <Circle
-            cx={size.width - 40}
-            cy={20}
-            r={110}
-            fill="rgba(255,255,255,0.07)"
-          />
-          <Circle
-            cx={size.width - 110}
-            cy={size.height + 10}
-            r={70}
-            fill="rgba(255,255,255,0.05)"
-          />
-        </Svg>
-      )}
-
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <View style={{ flex: 1, marginRight: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ color: WHITE_MUTED, fontSize: 13, fontWeight: '600' }}>
-              Spent today
-            </Text>
-            <TouchableOpacity
-              hitSlop={12}
-              onPress={() => updateSettings({ hideBalances: !hideBalances })}
-              accessibilityRole="button"
-              accessibilityLabel={hideBalances ? 'Show amounts' : 'Hide amounts'}
+          {size.width > 0 && (
+            <Svg
+              width={size.width}
+              height={size.height}
+              style={{ position: 'absolute', top: 0, left: 0 }}
             >
-              <Ionicons
-                name={hideBalances ? 'eye-off-outline' : 'eye-outline'}
-                size={15}
-                color={WHITE_MUTED}
+              <Defs>
+                <LinearGradient id="heroGradient" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0" stopColor={brand.skyDeep} />
+                  <Stop offset="0.55" stopColor={brand.sky} />
+                  <Stop offset="1" stopColor={brand.skySoft} />
+                </LinearGradient>
+                {/* Soft crimson tint from the bottom-left corner, echoing the red glow outside. */}
+                <RadialGradient id="heroGlow" cx="0.5" cy="0.5" r="0.5">
+                  <Stop offset="0" stopColor={brand.red} stopOpacity={0.3} />
+                  <Stop offset="1" stopColor={brand.red} stopOpacity={0} />
+                </RadialGradient>
+              </Defs>
+              <Rect
+                width={size.width}
+                height={size.height}
+                fill="url(#heroGradient)"
               />
-            </TouchableOpacity>
-          </View>
-          {hideBalances ? (
-            <Text
-              style={{
-                color: WHITE,
-                fontSize: 34,
-                fontWeight: '800',
-              }}
-            >
-              {MASK}
-            </Text>
-          ) : (
-            <Text
-              style={{ color: WHITE }}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              <Text
-                style={{ fontSize: 14, fontWeight: '600', color: WHITE_MUTED }}
-              >
-                {amount.symbol}{' '}
-              </Text>
-              <Text
-                style={{ fontSize: 36, fontWeight: '800', letterSpacing: -1.2 }}
-              >
-                {amount.whole}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 17,
-                  fontWeight: '700',
-                  color: 'rgba(255,255,255,0.55)',
-                }}
-              >
-                {amount.decimal}
-              </Text>
-            </Text>
+              <Circle
+                cx={10}
+                cy={size.height + 10}
+                r={size.height * 0.85}
+                fill="url(#heroGlow)"
+              />
+              <Circle
+                cx={size.width - 40}
+                cy={20}
+                r={110}
+                fill="rgba(255,255,255,0.08)"
+              />
+            </Svg>
           )}
-          {comparison && (
-            <View
-              style={{
-                alignSelf: 'flex-start',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                marginTop: 6,
-                paddingVertical: 3,
-                paddingHorizontal: 9,
-                borderRadius: radius.full,
-                backgroundColor: comparison.good
-                  ? 'rgba(74,222,128,0.18)'
-                  : 'rgba(248,113,113,0.22)',
-              }}
-            >
-              {spentToday > 0 && (
-                <Ionicons
-                  name={comparison.good ? 'trending-down' : 'trending-up'}
-                  size={13}
-                  color={comparison.good ? '#BBF7D0' : '#FECACA'}
-                />
-              )}
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: '700',
-                  color: comparison.good ? '#BBF7D0' : '#FECACA',
-                }}
-              >
-                {comparison.text}
-              </Text>
-            </View>
-          )}
-        </View>
-        {limitPercent !== null && <LimitRing percent={limitPercent} />}
-      </View>
 
-      <View
-        style={{
-          flexDirection: 'row',
-          marginTop: 14,
-          backgroundColor: GLASS,
-          borderRadius: 10,
-          paddingVertical: 8,
-        }}
-      >
-        {budget ? (
-          <StripStat
-            label={budget.remainingToday < 0 ? 'Over today' : 'Left today'}
-            value={money(Math.abs(budget.remainingToday))}
-            onPress={() => router.push('/(root)/(tabs)/budgets')}
-          />
-        ) : (
-          <StripStat
-            label="Usual day"
-            value={usualDay !== null ? money(usualDay) : '—'}
-          />
-        )}
-        <StripStat
-          label="Entries"
-          value={String(today.length)}
-          divider
-          onPress={() => router.push(activityHref({ range: ranges.today(now) }))}
-        />
-        <StripStat
-          label="This week"
-          value={money(spentThisWeek)}
-          divider
-          onPress={() => router.push(activityHref({ range: ranges.week(now), type: 'expense' }))}
-        />
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flex: 1, marginRight: spacing.md }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+              >
+                <Text
+                  style={{
+                    color: WHITE_MUTED,
+                    fontSize: 13,
+                    fontWeight: '600',
+                  }}
+                >
+                  Spent today
+                </Text>
+                <TouchableOpacity
+                  hitSlop={12}
+                  onPress={() =>
+                    updateSettings({ hideBalances: !hideBalances })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    hideBalances ? 'Show amounts' : 'Hide amounts'
+                  }
+                >
+                  <Ionicons
+                    name={hideBalances ? 'eye-off-outline' : 'eye-outline'}
+                    size={15}
+                    color={WHITE_MUTED}
+                  />
+                </TouchableOpacity>
+              </View>
+              {hideBalances ? (
+                <Text
+                  style={{
+                    color: WHITE,
+                    fontSize: 34,
+                    fontWeight: '800',
+                  }}
+                >
+                  {MASK}
+                </Text>
+              ) : (
+                <Text
+                  style={{ color: WHITE }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: WHITE_MUTED,
+                    }}
+                  >
+                    {amount.symbol}{' '}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 36,
+                      fontWeight: '800',
+                      letterSpacing: -1.2,
+                    }}
+                  >
+                    {amount.whole}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 17,
+                      fontWeight: '700',
+                      color: 'rgba(255,255,255,0.55)',
+                    }}
+                  >
+                    {amount.decimal}
+                  </Text>
+                </Text>
+              )}
+              {comparison && (
+                <View
+                  style={{
+                    alignSelf: 'flex-start',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    marginTop: 6,
+                    paddingVertical: 3,
+                    paddingHorizontal: 9,
+                    borderRadius: radius.full,
+                    backgroundColor: comparison.good
+                      ? 'rgba(74,222,128,0.18)'
+                      : 'rgba(248,113,113,0.22)',
+                  }}
+                >
+                  {spentToday > 0 && (
+                    <Ionicons
+                      name={comparison.good ? 'trending-down' : 'trending-up'}
+                      size={13}
+                      color={comparison.good ? '#BBF7D0' : '#FECACA'}
+                    />
+                  )}
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: comparison.good ? '#BBF7D0' : '#FECACA',
+                    }}
+                  >
+                    {comparison.text}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {limitPercent !== null && <LimitRing percent={limitPercent} />}
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              marginTop: 14,
+              backgroundColor: GLASS,
+              borderRadius: 10,
+              paddingVertical: 8,
+            }}
+          >
+            {budget ? (
+              <StripStat
+                label={budget.remainingToday < 0 ? 'Over today' : 'Left today'}
+                value={money(Math.abs(budget.remainingToday))}
+                onPress={() => router.push('/(root)/(tabs)/budgets')}
+              />
+            ) : (
+              <StripStat
+                label="Usual day"
+                value={usualDay !== null ? money(usualDay) : '—'}
+              />
+            )}
+            <StripStat
+              label="Entries"
+              value={String(today.length)}
+              divider
+              onPress={() =>
+                router.push(activityHref({ range: ranges.today(now) }))
+              }
+            />
+            <StripStat
+              label="This week"
+              value={money(spentThisWeek)}
+              divider
+              onPress={() =>
+                router.push(
+                  activityHref({ range: ranges.week(now), type: 'expense' })
+                )
+              }
+            />
+          </View>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
