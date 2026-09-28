@@ -296,7 +296,6 @@ export default function AutomationScreen() {
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: `${colors.income}`,
           }}
         >
           <Ionicons
