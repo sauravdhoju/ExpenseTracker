@@ -1,94 +1,95 @@
-import { Alert, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Alert, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useCurrency } from '../../hooks/useCurrency';
 import { useAppStore } from '../../store/useAppStore';
+import { formatPlain, MASK } from '../dashboard/money';
 import { spacing } from '../../constants/theme';
-import IconCircle from '../ui/IconCircle';
+import { Dot, SheetRow } from '../ui/Sheet';
 import type { Transaction } from '../../types';
+
+const TYPE_LABELS: Record<Transaction['type'], string> = {
+  expense: 'Expense',
+  income: 'Income',
+  transfer: 'Transfer',
+  lent: 'Lent',
+  repayment: 'Repayment',
+  forgotten: 'Forgotten money',
+};
+
+export function to12h(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
 
 interface Props {
   transaction: Transaction;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
+  /** Last row in its sheet: no divider below. */
+  last?: boolean;
+  /** Show the category in the subtitle (off when the list is already filtered to one category). */
+  showCategory?: boolean;
 }
 
-export default function TransactionListItem({ transaction, onDelete }: Props) {
+/** One transaction as a sheet row: colour dot, title, time/context, signed amount. Long-press deletes. */
+export default function TransactionListItem({ transaction: t, onDelete, last, showCategory = true }: Props) {
   const colors = useThemeColors();
-  const { format } = useCurrency();
+  const { currency, hideBalances } = useCurrency();
   const router = useRouter();
   const categories = useAppStore((s) => s.categories);
   const accounts = useAppStore((s) => s.accounts);
 
-  const category = categories.find((c) => c.id === transaction.categoryId);
-  const account = accounts.find((a) => a.id === transaction.accountId);
-  const toAccount = accounts.find((a) => a.id === transaction.toAccountId);
+  const category = categories.find((c) => c.id === t.categoryId);
+  const account = accounts.find((a) => a.id === t.accountId);
+  const toAccount = accounts.find((a) => a.id === t.toAccountId);
+  const isLoanLinked = !!t.loanId;
+  const isOut = t.type === 'expense' || t.type === 'lent';
+  const isIn = t.type === 'income' || t.type === 'repayment';
 
-  const isExpense = transaction.type === 'expense' || transaction.type === 'lent';
-  const isTransfer = transaction.type === 'transfer';
-  const isLoanLinked = !!transaction.loanId;
-  const sign = isTransfer ? '' : isExpense ? '-' : '+';
-  const amountColor = isTransfer ? colors.text : isExpense ? colors.expense : colors.income;
+  const dot = category?.color ?? (isIn ? colors.income : t.type === 'transfer' || isLoanLinked ? colors.primary : colors.textLight);
+  const context =
+    t.type === 'transfer'
+      ? `${account?.name ?? ''} → ${toAccount?.name ?? ''}`
+      : [showCategory ? category?.name ?? TYPE_LABELS[t.type] : null, account?.name].filter(Boolean).join(' · ');
 
-  const icon = isTransfer
-    ? 'swap-horizontal'
-    : transaction.type === 'lent'
-      ? 'arrow-up-circle-outline'
-      : transaction.type === 'repayment'
-        ? 'arrow-down-circle-outline'
-        : ((category?.icon as any) ?? 'pricetag');
-  const iconColor = isTransfer || isLoanLinked ? colors.primary : (category?.color ?? colors.textLight);
-
-  const subtitle = isTransfer
-    ? `${account?.name ?? ''} → ${toAccount?.name ?? ''}`
-    : `${transaction.time}${account ? ' · ' + account.name : ''}${category ? ' · ' + category.name : ''}`;
+  const openDetail = () => {
+    if (isLoanLinked) router.push({ pathname: '/loans/[id]', params: { id: t.loanId! } });
+    else router.push({ pathname: '/transaction/[id]', params: { id: t.id } });
+  };
 
   const confirmDelete = () => {
+    if (!onDelete || isLoanLinked) return;
     Alert.alert('Delete transaction', 'This will reverse its effect on your account balance.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => onDelete(transaction.id) },
+      { text: 'Delete', style: 'destructive', onPress: () => onDelete(t.id) },
     ]);
   };
 
-  const openDetail = () => {
-    if (isLoanLinked) {
-      router.push({ pathname: '/loans/[id]', params: { id: transaction.loanId! } });
-    } else {
-      router.push({ pathname: '/transaction/[id]', params: { id: transaction.id } });
-    }
-  };
-
   return (
-    <TouchableOpacity
-      accessibilityRole="button"
-      onLongPress={isLoanLinked ? openDetail : confirmDelete}
-      onPress={openDetail}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: spacing.sm + 2,
-      }}
-    >
-      <IconCircle name={icon} color={iconColor} />
-      <View style={{ flex: 1, marginLeft: spacing.md }}>
-        <Text style={{ fontSize: 15, fontWeight: '500', color: colors.text }} numberOfLines={1}>
-          {transaction.title}
+    <SheetRow last={last} onPress={openDetail} onLongPress={onDelete && !isLoanLinked ? confirmDelete : undefined}>
+      <View style={{ marginRight: spacing.md }}>
+        <Dot color={dot} />
+      </View>
+      <View style={{ flex: 1, marginRight: spacing.md }}>
+        <Text style={{ fontSize: 14.5, fontWeight: '600', color: colors.text }} numberOfLines={1}>
+          {t.title || category?.name || TYPE_LABELS[t.type]}
         </Text>
-        <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2 }} numberOfLines={1}>
-          {subtitle}
+        <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }} numberOfLines={1}>
+          {to12h(t.time)}
+          {context ? ` · ${context}` : ''}
         </Text>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 15, fontWeight: '600', color: amountColor }}>
-          {sign}
-          {format(transaction.amount)}
-        </Text>
-        {!isLoanLinked && (
-          <TouchableOpacity onPress={confirmDelete} hitSlop={8} style={{ marginTop: 4 }}>
-            <Ionicons name="trash-outline" size={14} color={colors.textLight} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
+      <Text
+        style={{
+          fontSize: 14.5,
+          fontWeight: '700',
+          color: isIn ? colors.income : colors.text,
+          fontVariant: ['tabular-nums'],
+        }}
+      >
+        {hideBalances ? MASK : `${isOut ? '−' : isIn ? '+' : ''}${formatPlain(t.amount, currency)}`}
+      </Text>
+    </SheetRow>
   );
 }

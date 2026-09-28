@@ -23,6 +23,7 @@ import { addDays, daysBetween, toISODate } from '../../utils/date';
 import { spacing } from '../../constants/theme';
 import { SheetRow } from './SectionCard';
 import { MASK, formatPlain } from './money';
+import { activityHref, ranges } from '../../utils/links';
 
 interface GlanceRowProps {
   title: string;
@@ -108,31 +109,37 @@ export function WeekRow({ now, last }: RowProps) {
   const router = useRouter();
   const transactions = useAppStore((s) => s.transactions);
 
-  const { days, previous } = useMemo(() => {
-    const today = toISODate(now);
+  // Same Monday–Sunday week as the hero's "This week" and Activity's "Week", so all three agree.
+  const week = ranges.week(now);
+  const weekStart = week.start;
+  const today = toISODate(now);
+  const { days, previous, todayIndex } = useMemo(() => {
     const byDate = new Map<string, number>();
     for (const t of transactions) {
       if (t.type === 'expense') byDate.set(t.date, (byDate.get(t.date) ?? 0) + t.amount);
     }
+    const isoDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+    const todayIndex = isoDays.indexOf(today);
+    // Compare against the same weekdays of last week, so a partial week isn't measured against a full one.
     let previous = 0;
-    for (let i = 7; i < 14; i++) previous += byDate.get(addDays(today, -i)) ?? 0;
-    return { days: Array.from({ length: 7 }, (_, i) => byDate.get(addDays(today, i - 6)) ?? 0), previous };
-  }, [transactions, now]);
+    for (let i = 0; i <= todayIndex; i++) previous += byDate.get(addDays(isoDays[i], -7)) ?? 0;
+    return { days: isoDays.map((d) => byDate.get(d) ?? 0), previous, todayIndex };
+  }, [transactions, weekStart, today]);
   const total = days.reduce((a, b) => a + b, 0);
   const max = Math.max(1, ...days);
   const change = previous > 0 ? ((total - previous) / previous) * 100 : null;
 
   return (
     <GlanceRow
-      title="Last 7 days"
+      title="This week"
       subtitle={
         change === null || Math.round(change) === 0
-          ? 'Daily spending this week'
-          : `${Math.abs(change).toFixed(0)}% ${change < 0 ? 'less' : 'more'} than the week before`
+          ? 'Spent since Monday'
+          : `${Math.abs(change).toFixed(0)}% ${change < 0 ? 'less' : 'more'} than last week so far`
       }
       value={money(total)}
       last={last}
-      onPress={() => router.push('/(root)/(tabs)/reports')}
+      onPress={() => router.push(activityHref({ range: week, type: 'expense' }))}
       accessory={
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 18, marginTop: 5 }}>
           {days.map((d, i) => (
@@ -142,7 +149,7 @@ export function WeekRow({ now, last }: RowProps) {
                 width: 5,
                 height: Math.max(2, (d / max) * 18),
                 borderRadius: 2,
-                backgroundColor: i === 6 ? colors.primaryDeep : colors.border,
+                backgroundColor: i === todayIndex ? colors.primaryDeep : colors.border,
               }}
             />
           ))}
@@ -174,7 +181,7 @@ export function MonthRow({ now, last }: RowProps) {
       }
       value={money(spent)}
       last={last}
-      onPress={() => router.push('/(root)/(tabs)/reports')}
+      onPress={() => router.push(activityHref({ range: ranges.month(now, dateSystem), type: 'expense' }))}
     />
   );
 }

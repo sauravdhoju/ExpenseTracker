@@ -14,7 +14,7 @@ export interface DashboardWidgetMeta {
 export const DASHBOARD_WIDGETS: DashboardWidgetMeta[] = [
   { id: 'todayActivity', title: "Today's entries", description: 'Everything you logged today', icon: 'git-commit-outline', kind: 'section' },
   { id: 'quickAdd', title: 'Quick add', description: 'One-tap shortcuts for frequent entries', icon: 'flash-outline', kind: 'section' },
-  { id: 'week', title: 'Last 7 days', description: 'Weekly total with a mini chart', icon: 'bar-chart-outline', kind: 'glance' },
+  { id: 'week', title: 'This week', description: 'Spent since Monday, with a mini chart', icon: 'bar-chart-outline', kind: 'glance' },
   { id: 'budget', title: 'Monthly budget', description: 'What remains of your monthly budget', icon: 'pie-chart-outline', kind: 'glance' },
   { id: 'month', title: 'This month', description: 'Month-to-date spending vs last month', icon: 'calendar-outline', kind: 'glance' },
   { id: 'bills', title: 'Next bill', description: 'Your next upcoming payment', icon: 'receipt-outline', kind: 'glance' },

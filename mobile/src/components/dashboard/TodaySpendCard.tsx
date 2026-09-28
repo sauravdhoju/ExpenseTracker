@@ -19,6 +19,7 @@ import {
   getTotalExpenses,
 } from '../../services/calculations';
 import { addDays, toISODate } from '../../utils/date';
+import { activityHref, ranges } from '../../utils/links';
 import { radius, spacing } from '../../constants/theme';
 import { MASK, formatCompact, splitAmount } from './money';
 
@@ -82,13 +83,18 @@ function StripStat({
   label,
   value,
   divider,
+  onPress,
 }: {
   label: string;
   value: string;
   divider?: boolean;
+  onPress?: () => void;
 }) {
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.6}
+      disabled={!onPress}
+      onPress={onPress}
       style={{
         flex: 1,
         alignItems: 'center',
@@ -105,7 +111,7 @@ function StripStat({
       >
         {value}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -173,7 +179,7 @@ export default function TodaySpendCard({ now }: { now: Date }) {
   return (
     <TouchableOpacity
       activeOpacity={0.92}
-      onPress={() => router.push('/(root)/(tabs)/transactions')}
+      onPress={() => router.push(activityHref({ range: ranges.today(now), type: 'expense' }))}
       onLayout={(e) =>
         setSize({
           width: e.nativeEvent.layout.width,
@@ -338,6 +344,7 @@ export default function TodaySpendCard({ now }: { now: Date }) {
           <StripStat
             label={budget.remainingToday < 0 ? 'Over today' : 'Left today'}
             value={money(Math.abs(budget.remainingToday))}
+            onPress={() => router.push('/(root)/(tabs)/budgets')}
           />
         ) : (
           <StripStat
@@ -345,8 +352,18 @@ export default function TodaySpendCard({ now }: { now: Date }) {
             value={usualDay !== null ? money(usualDay) : '—'}
           />
         )}
-        <StripStat label="Entries" value={String(today.length)} divider />
-        <StripStat label="This week" value={money(spentThisWeek)} divider />
+        <StripStat
+          label="Entries"
+          value={String(today.length)}
+          divider
+          onPress={() => router.push(activityHref({ range: ranges.today(now) }))}
+        />
+        <StripStat
+          label="This week"
+          value={money(spentThisWeek)}
+          divider
+          onPress={() => router.push(activityHref({ range: ranges.week(now), type: 'expense' }))}
+        />
       </View>
     </TouchableOpacity>
   );

@@ -8,6 +8,7 @@ import { filterByDay } from '../../services/calculations';
 import { spacing } from '../../constants/theme';
 import { SectionTitle } from './SectionCard';
 import { MASK, formatPlain } from './money';
+import { activityHref, ranges } from '../../utils/links';
 
 const MAX_ROWS = 5;
 
@@ -72,10 +73,7 @@ export default function WhereItWent({ now }: { now: Date }) {
               <TouchableOpacity
                 key={s.categoryId ?? 'none'}
                 activeOpacity={0.6}
-                disabled={!s.categoryId}
-                onPress={() =>
-                  router.push({ pathname: '/(root)/(tabs)/transactions', params: { categoryId: s.categoryId! } })
-                }
+                onPress={() => router.push(activityHref({ range: ranges.today(now), type: 'expense', categoryId: s.categoryId }))}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -109,7 +107,11 @@ export default function WhereItWent({ now }: { now: Date }) {
           })}
 
           {rest > 0 && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}>
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={() => router.push(activityHref({ range: ranges.today(now), type: 'expense' }))}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+            >
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border, marginRight: spacing.md }} />
               <Text style={{ flex: 1, fontSize: 14.5, color: colors.textLight }}>
                 {slices.length - MAX_ROWS} other {slices.length - MAX_ROWS === 1 ? 'category' : 'categories'}
@@ -120,7 +122,7 @@ export default function WhereItWent({ now }: { now: Date }) {
               <Text style={{ width: 96, textAlign: 'right', fontSize: 14.5, fontWeight: '700', color: colors.text }}>
                 {hideBalances ? MASK : formatPlain(rest, currency)}
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
         </>
       )}

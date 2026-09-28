@@ -56,6 +56,8 @@ export default function PageHeader({ title, subtitle, actions, rightContent }: P
                 height: 38,
                 borderRadius: 19,
                 backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}

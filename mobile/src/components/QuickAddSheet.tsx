@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { radius, spacing } from '../constants/theme';
+import { Sheet, SheetRow } from './ui/Sheet';
 
 interface QuickAddSheetProps {
   visible: boolean;
@@ -72,7 +73,7 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
       >
         <Pressable
           style={{
-            backgroundColor: colors.card,
+            backgroundColor: colors.background,
             borderTopLeftRadius: radius.xl,
             borderTopRightRadius: radius.xl,
             paddingHorizontal: spacing.xl,
@@ -116,48 +117,18 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
             </TouchableOpacity>
           </View>
 
-          <View style={{ gap: spacing.sm }}>
-            {OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt.type}
-                accessibilityRole="button"
-                activeOpacity={0.7}
-                onPress={() => handlePick(opt.type)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.md,
-                  padding: spacing.md,
-                  borderRadius: radius.lg,
-                  backgroundColor: colors.background,
-                }}
-              >
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: `${opt.color}1F`,
-                  }}
-                >
-                  <Ionicons name={opt.icon} size={22} color={opt.color} />
+          <Sheet>
+            {OPTIONS.map((opt, i) => (
+              <SheetRow key={opt.type} last={i === OPTIONS.length - 1} onPress={() => handlePick(opt.type)}>
+                <Ionicons name={opt.icon} size={24} color={opt.color} />
+                <View style={{ flex: 1, marginLeft: spacing.md }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{opt.label}</Text>
+                  <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 1 }}>{opt.subtitle}</Text>
                 </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15.5, fontWeight: '700', color: colors.text }}>
-                    {opt.label}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 1 }}>
-                    {opt.subtitle}
-                  </Text>
-                </View>
-
-                <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
-              </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={16} color={colors.border} />
+              </SheetRow>
             ))}
-          </View>
+          </Sheet>
         </Pressable>
       </Pressable>
     </Modal>

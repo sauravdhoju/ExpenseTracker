@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
 import { useDateFormat } from '../../../src/hooks/useDateFormat';
@@ -26,26 +27,26 @@ import {
 } from '../../../src/services/calculations';
 import { addMonths, MONTH_NAMES, todayISO } from '../../../src/utils/date';
 import { adIsoToBs, formatBsDate, formatBsMonthYear, getMonthGrid, shiftMonth, shiftYear, type MonthGridCell } from '../../../src/utils/bsDate';
-import type { DateSystem } from '../../../src/types';
+import { activityHref } from '../../../src/utils/links';
+import type { DateSystem, TransactionType } from '../../../src/types';
 import { spacing, radius } from '../../../src/constants/theme';
-import Card from '../../../src/components/ui/Card';
 import PageHeader from '../../../src/components/ui/PageHeader';
-import EmptyState from '../../../src/components/ui/EmptyState';
 import DateField from '../../../src/components/ui/DateField';
-import DonutChart from '../../../src/components/charts/DonutChart';
+import Segmented from '../../../src/components/ui/Segmented';
+import { Dot, SectionTitle, Sheet, SheetRow, Stat } from '../../../src/components/ui/Sheet';
 import BarChart from '../../../src/components/charts/BarChart';
-import LineChart from '../../../src/components/charts/LineChart';
 import TransactionListItem from '../../../src/components/transactions/TransactionListItem';
+import { MASK } from '../../../src/components/dashboard/money';
 
-const PERIODS: { value: ReportPeriod; label: string }[] = [
+const PERIODS: { value: Exclude<ReportPeriod, 'custom'>; label: string }[] = [
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
   { value: 'quarter', label: 'Quarter' },
   { value: 'year', label: 'Year' },
-  { value: 'custom', label: 'Custom' },
 ];
 
-const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const REVEAL_MS = 8000;
 
 function formatRangeLabel(period: ReportPeriod, range: DateRange, dateSystem: DateSystem): string {
   const start = new Date(range.start + 'T00:00:00');
@@ -53,13 +54,9 @@ function formatRangeLabel(period: ReportPeriod, range: DateRange, dateSystem: Da
   if (period === 'year') return dateSystem === 'BS' ? String(adIsoToBs(range.start).year) : String(start.getFullYear());
   if (period === 'quarter') return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
   if (period === 'month') {
-    return dateSystem === 'BS'
-      ? formatBsMonthYear(start)
-      : `${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}`;
+    return dateSystem === 'BS' ? formatBsMonthYear(start) : `${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}`;
   }
-  if (dateSystem === 'BS') {
-    return `${formatBsDate(range.start)} – ${formatBsDate(range.end)}`;
-  }
+  if (dateSystem === 'BS') return `${formatBsDate(range.start)} – ${formatBsDate(range.end)}`;
   const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
   const startLabel = `${MONTH_NAMES[start.getMonth()].slice(0, 3)} ${start.getDate()}`;
   const endLabel = sameMonth ? `${end.getDate()}` : `${MONTH_NAMES[end.getMonth()].slice(0, 3)} ${end.getDate()}`;
@@ -79,34 +76,23 @@ function computeDelta(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100;
 }
 
-function DeltaChip({ current, previous, favorableWhenUp }: { current: number; previous: number; favorableWhenUp: boolean }) {
+function Delta({ current, previous, favorableWhenUp }: { current: number; previous: number; favorableWhenUp: boolean }) {
   const colors = useThemeColors();
-  const percentChange = computeDelta(current, previous);
-  if (percentChange === null || percentChange === 0) return null;
-  const isUp = percentChange > 0;
-  const isFavorable = isUp === favorableWhenUp;
-  const color = isFavorable ? colors.income : colors.expense;
+  const change = computeDelta(current, previous);
+  if (change === null || Math.round(change) === 0) return null;
+  const isUp = change > 0;
+  const color = isUp === favorableWhenUp ? colors.income : colors.expense;
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-        paddingVertical: 2,
-        paddingHorizontal: 6,
-        borderRadius: radius.full,
-        backgroundColor: `${color}1A`,
-      }}
-    >
-      <Ionicons name={isUp ? 'arrow-up' : 'arrow-down'} size={10} color={color} />
-      <Text style={{ fontSize: 11, fontWeight: '700', color }}>{Math.abs(percentChange).toFixed(0)}%</Text>
-    </View>
+    <Text style={{ fontSize: 11.5, fontWeight: '700', color }}>
+      {isUp ? '↑' : '↓'} {Math.abs(change).toFixed(0)}%
+    </Text>
   );
 }
 
 export default function ReportsScreen() {
   const colors = useThemeColors();
-  const { format } = useCurrency();
+  const insets = useSafeAreaInsets();
+  const { format, hideBalances } = useCurrency();
   const { format: formatDate, dateSystem } = useDateFormat();
   const router = useRouter();
 
@@ -126,12 +112,18 @@ export default function ReportsScreen() {
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customStart, setCustomStart] = useState(todayISO());
   const [customEnd, setCustomEnd] = useState(todayISO());
+  const [netWorthRevealed, setNetWorthRevealed] = useState(false);
 
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? 'Other';
-  const categoryColor = (id: string) => categories.find((c) => c.id === id)?.color ?? colors.textLight;
+  useEffect(() => {
+    if (!netWorthRevealed) return;
+    const timer = setTimeout(() => setNetWorthRevealed(false), REVEAL_MS);
+    return () => clearTimeout(timer);
+  }, [netWorthRevealed]);
+
+  const category = (id: string | null) => categories.find((c) => c.id === id);
 
   const range = useMemo(
     () => getPeriodRange(period, periodAnchor, customRange ?? undefined, dateSystem),
@@ -142,25 +134,27 @@ export default function ReportsScreen() {
 
   const rangeTx = useMemo(() => filterByRange(transactions, range), [transactions, range]);
   const prevRangeTx = useMemo(() => filterByRange(transactions, prevRange), [transactions, prevRange]);
-  const lastYearTx = useMemo(() => filterByRange(transactions, lastYearRange), [transactions, lastYearRange]);
+  const lastYearExpenses = useMemo(() => getTotalExpenses(filterByRange(transactions, lastYearRange)), [transactions, lastYearRange]);
 
-  const flow = useMemo(() => {
-    const income = getTotalIncome(rangeTx);
-    const expenses = getTotalExpenses(rangeTx);
-    const lent = getTotalLent(rangeTx);
-    const repaid = getTotalRepaid(rangeTx);
-    return { income, expenses, lent, repaid, net: income - expenses };
-  }, [rangeTx]);
-
-  const prevFlow = useMemo(() => {
-    const income = getTotalIncome(prevRangeTx);
-    const expenses = getTotalExpenses(prevRangeTx);
-    const lent = getTotalLent(prevRangeTx);
-    const repaid = getTotalRepaid(prevRangeTx);
-    return { income, expenses, lent, repaid, net: income - expenses };
-  }, [prevRangeTx]);
-
-  const lastYearExpenses = useMemo(() => getTotalExpenses(lastYearTx), [lastYearTx]);
+  const flow = useMemo(
+    () => ({
+      income: getTotalIncome(rangeTx),
+      expenses: getTotalExpenses(rangeTx),
+      lent: getTotalLent(rangeTx),
+      repaid: getTotalRepaid(rangeTx),
+    }),
+    [rangeTx]
+  );
+  const prevFlow = useMemo(
+    () => ({
+      income: getTotalIncome(prevRangeTx),
+      expenses: getTotalExpenses(prevRangeTx),
+      lent: getTotalLent(prevRangeTx),
+      repaid: getTotalRepaid(prevRangeTx),
+    }),
+    [prevRangeTx]
+  );
+  const net = flow.income - flow.expenses;
 
   const categorySpending = useMemo(() => getCategorySpending(rangeTx), [rangeTx]);
 
@@ -173,20 +167,22 @@ export default function ReportsScreen() {
       }),
     [buckets, transactions, period]
   );
-  const cashFlowSeries = bucketTotals.map((b) => b.income - b.expenses);
   const chartWidth = Math.max(300, bucketTotals.length * 44);
 
   const topExpenses = useMemo(
-    () => [...rangeTx].filter((t) => t.type === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 5),
+    () => rangeTx.filter((t) => t.type === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 5),
     [rangeTx]
   );
 
   const netWorth = getNetWorth(accounts);
-
   const forgottenLoans = useMemo(() => getForgottenLoans(loans, repayments), [loans, repayments]);
   const idleGoalsList = useMemo(() => getIdleGoals(goals), [goals]);
   const idleAccountsList = useMemo(() => getIdleAccounts(accounts, transactions), [accounts, transactions]);
-  const hasForgottenItems = forgottenLoans.length + idleGoalsList.length + idleAccountsList.length > 0;
+  const attentionCount = forgottenLoans.length + idleGoalsList.length + idleAccountsList.length;
+
+  // Every figure below links to Activity with this exact range, so the list total matches.
+  const openActivity = (type?: TransactionType, categoryId?: string | null) =>
+    router.push(activityHref({ range, type, categoryId }));
 
   const stepPeriod = (dir: 1 | -1) => {
     setPeriodAnchor((prev) => {
@@ -209,20 +205,19 @@ export default function ReportsScreen() {
   };
 
   const applyCustomRange = () => {
-    setCustomRange({ start: customStart, end: customEnd });
+    setCustomRange(customStart <= customEnd ? { start: customStart, end: customEnd } : { start: customEnd, end: customStart });
     setPeriod('custom');
     setCustomModalOpen(false);
   };
 
   // --- Calendar view data ---
-  // The grid itself follows the selected calendar system (true BS month lengths/weekdays in BS mode),
-  // not just a relabeled Gregorian grid — only the underlying AD ISO dates used to look up data stay fixed.
+  // The grid follows the selected calendar system (true BS month lengths/weekdays in BS mode);
+  // only the underlying AD ISO dates used to look up data stay fixed.
   const monthGrid = useMemo(() => getMonthGrid(calendarMonth, dateSystem), [calendarMonth, dateSystem]);
   const gridDates = useMemo(
     () => new Set(monthGrid.cells.filter((c): c is MonthGridCell => c !== null).map((c) => c.adIso)),
     [monthGrid]
   );
-
   const dailyExpense = useMemo(() => {
     const map: Record<string, number> = {};
     for (const t of transactions) {
@@ -232,7 +227,7 @@ export default function ReportsScreen() {
     return map;
   }, [transactions, gridDates]);
   const maxDailyExpense = Math.max(1, ...Object.values(dailyExpense));
-
+  const calendarMonthTotal = Object.values(dailyExpense).reduce((a, b) => a + b, 0);
   const dailyIncomeDates = useMemo(
     () => new Set(transactions.filter((t) => t.type === 'income' && gridDates.has(t.date)).map((t) => t.date)),
     [transactions, gridDates]
@@ -261,137 +256,143 @@ export default function ReportsScreen() {
   const selectedDayBills = selectedDay ? billsByDate[selectedDay] ?? [] : [];
   const selectedDayLoans = selectedDay ? loansByDate[selectedDay] ?? [] : [];
 
-  const rowStyle = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.sm };
+  const flowRows: { label: string; value: number; prev: number; up: boolean; type: TransactionType; color?: string }[] = [
+    { label: 'Income', value: flow.income, prev: prevFlow.income, up: true, type: 'income', color: colors.income },
+    { label: 'Spent', value: flow.expenses, prev: prevFlow.expenses, up: false, type: 'expense' },
+    { label: 'Lent to others', value: flow.lent, prev: prevFlow.lent, up: false, type: 'lent' },
+    { label: 'Repaid to you', value: flow.repaid, prev: prevFlow.repaid, up: true, type: 'repayment', color: colors.income },
+  ];
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 130 }}>
-      <PageHeader title="Reports" subtitle="Understand where your money goes" />
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: 130 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <PageHeader title="Reports" subtitle={view === 'overview' ? formatRangeLabel(period, range, dateSystem) : monthGrid.label} />
 
-      {/* Overview / Calendar segmented toggle */}
-      <View style={{ flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.lg, padding: 4, marginBottom: spacing.lg }}>
-        {(['overview', 'calendar'] as const).map((v) => (
-          <TouchableOpacity
-            key={v}
-            onPress={() => setView(v)}
-            style={{
-              flex: 1,
-              paddingVertical: 9,
-              borderRadius: radius.md,
-              alignItems: 'center',
-              backgroundColor: view === v ? colors.primary : 'transparent',
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: '700', color: view === v ? colors.white : colors.textLight, textTransform: 'capitalize' }}>
-              {v}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <Segmented
+        options={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'calendar', label: 'Calendar' },
+        ]}
+        value={view}
+        onChange={setView}
+      />
 
       {view === 'overview' ? (
         <>
-          {/* Period switcher */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginBottom: spacing.md }}>
-            {PERIODS.map((p) => (
-              <TouchableOpacity
-                key={p.value}
-                onPress={() => (p.value === 'custom' ? openCustomModal() : setPeriod(p.value))}
-                style={{
-                  paddingVertical: 7,
-                  paddingHorizontal: 14,
-                  borderRadius: radius.full,
-                  backgroundColor: period === p.value ? colors.primary : colors.card,
-                }}
-              >
-                <Text style={{ fontSize: 12.5, fontWeight: '600', color: period === p.value ? colors.white : colors.text }}>
-                  {p.label}
-                </Text>
+          <View style={{ marginTop: spacing.md }}>
+            <Segmented options={PERIODS} value={period === 'custom' ? null : period} onChange={(p) => setPeriod(p)} />
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg }}>
+            {period !== 'custom' ? (
+              <TouchableOpacity onPress={() => stepPeriod(-1)} hitSlop={10}>
+                <Ionicons name="chevron-back" size={20} color={colors.text} />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {period !== 'custom' && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.lg }}>
-              <TouchableOpacity onPress={() => stepPeriod(-1)} hitSlop={8}>
-                <Ionicons name="chevron-back" size={18} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{formatRangeLabel(period, range, dateSystem)}</Text>
-              <TouchableOpacity onPress={() => stepPeriod(1)} hitSlop={8}>
-                <Ionicons name="chevron-forward" size={18} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-          )}
-          {period === 'custom' && (
-            <TouchableOpacity onPress={openCustomModal} style={{ alignSelf: 'center', marginBottom: spacing.lg }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>{formatRangeLabel(period, range, dateSystem)} ✎</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Net worth */}
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 13, color: colors.textLight, marginBottom: 4 }}>Net Worth</Text>
-            <Text style={{ fontSize: 26, fontWeight: '700', color: colors.text }}>{format(netWorth)}</Text>
-            <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>Assets minus liabilities across all accounts</Text>
-          </Card>
-
-          {/* Money Flow */}
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>Money Flow</Text>
-            <View style={{ gap: spacing.sm }}>
-              {[
-                { label: 'Income', value: flow.income, prev: prevFlow.income, favorableWhenUp: true, color: colors.income },
-                { label: 'Expenses', value: flow.expenses, prev: prevFlow.expenses, favorableWhenUp: false, color: colors.expense },
-                { label: 'Lent to others', value: flow.lent, prev: prevFlow.lent, favorableWhenUp: false, color: colors.expense },
-                { label: 'Repaid to me', value: flow.repaid, prev: prevFlow.repaid, favorableWhenUp: true, color: colors.income },
-                { label: 'Net', value: flow.net, prev: prevFlow.net, favorableWhenUp: true, color: colors.text },
-              ].map((row) => (
-                <View key={row.label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13.5, color: colors.textLight }}>{row.label}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: row.color }}>{format(row.value)}</Text>
-                    <DeltaChip current={row.value} previous={row.prev} favorableWhenUp={row.favorableWhenUp} />
-                  </View>
-                </View>
-              ))}
-            </View>
-            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md }} />
-            <Text style={{ fontSize: 11.5, color: colors.textLight }}>
-              Same period last year: {format(lastYearExpenses)} spent
-            </Text>
-          </Card>
-
-          {/* Expense breakdown */}
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>Expense Breakdown</Text>
-            {categorySpending.length === 0 ? (
-              <EmptyState icon="pie-chart-outline" title="No expenses yet" message="Add expenses to see your breakdown." />
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-                <DonutChart data={categorySpending.map((c) => ({ value: c.amount, color: categoryColor(c.categoryId) }))}>
-                  <Text style={{ fontSize: 12, color: colors.textLight }}>Total</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{format(flow.expenses)}</Text>
-                </DonutChart>
-                <View style={{ flex: 1, gap: 8 }}>
-                  {categorySpending.slice(0, 5).map((c) => (
-                    <View key={c.categoryId} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: categoryColor(c.categoryId) }} />
-                      <Text style={{ flex: 1, fontSize: 12.5, color: colors.text }} numberOfLines={1}>
-                        {categoryName(c.categoryId)}
-                      </Text>
-                      <Text style={{ fontSize: 12.5, fontWeight: '600', color: colors.text }}>{c.percent.toFixed(0)}%</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+              <View style={{ width: 20 }} />
             )}
-          </Card>
+            <TouchableOpacity onPress={openCustomModal} hitSlop={6}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>
+                {formatRangeLabel(period, range, dateSystem)}
+                <Text style={{ color: colors.primaryDeep, fontWeight: '600', fontSize: 12.5 }}>  Custom</Text>
+              </Text>
+            </TouchableOpacity>
+            {period !== 'custom' ? (
+              <TouchableOpacity onPress={() => stepPeriod(1)} hitSlop={10}>
+                <Ionicons name="chevron-forward" size={20} color={colors.text} />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 20 }} />
+            )}
+          </View>
+
+          {/* Headline */}
+          <Sheet style={{ marginTop: spacing.lg, paddingVertical: spacing.lg }}>
+            <TouchableOpacity activeOpacity={0.6} onPress={() => openActivity('expense')}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 12, color: colors.textLight }}>Spent</Text>
+                <Delta current={flow.expenses} previous={prevFlow.expenses} favorableWhenUp={false} />
+              </View>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: colors.text, marginTop: 2, fontVariant: ['tabular-nums'] }}>
+                {format(flow.expenses)}
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
+                vs {format(prevFlow.expenses)} the period before · {format(lastYearExpenses)} a year ago
+              </Text>
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.lg }} />
+            <View style={{ flexDirection: 'row' }}>
+              <Stat label="Income" value={format(flow.income)} color={colors.income} onPress={() => openActivity('income')} />
+              <Stat label="Net" value={format(net)} color={net < 0 ? colors.expense : colors.text} align="flex-end" onPress={() => openActivity()} />
+            </View>
+          </Sheet>
+
+          {/* Where it went */}
+          <SectionTitle title="Where it went" />
+          {categorySpending.length === 0 ? (
+            <Text style={{ fontSize: 14, color: colors.textLight }}>No spending in this period.</Text>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', height: 8, gap: 2, borderRadius: 4, overflow: 'hidden', marginBottom: spacing.xs }}>
+                {categorySpending.map((c) => (
+                  <View key={c.categoryId} style={{ flex: Math.max(c.percent, 2), backgroundColor: category(c.categoryId)?.color ?? colors.textLight }} />
+                ))}
+              </View>
+              {categorySpending.slice(0, 8).map((c, i, arr) => (
+                <TouchableOpacity
+                  key={c.categoryId}
+                  activeOpacity={0.6}
+                  onPress={() => openActivity('expense', c.categoryId)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 12,
+                    borderBottomWidth: i === arr.length - 1 ? 0 : 1,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <View style={{ marginRight: spacing.md }}>
+                    <Dot color={category(c.categoryId)?.color ?? colors.textLight} />
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '500', color: colors.text }} numberOfLines={1}>
+                    {category(c.categoryId)?.name ?? 'Other'}
+                  </Text>
+                  <Text style={{ width: 44, textAlign: 'right', fontSize: 13, color: colors.textLight }}>{c.percent.toFixed(0)}%</Text>
+                  <Text style={{ minWidth: 104, textAlign: 'right', fontSize: 14.5, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                    {format(c.amount)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+
+          {/* Money flow */}
+          <SectionTitle title="Money flow" />
+          <Sheet>
+            {flowRows.map((row, i) => (
+              <SheetRow key={row.label} last={i === flowRows.length - 1} onPress={() => openActivity(row.type)}>
+                <Text style={{ flex: 1, fontSize: 14.5, color: colors.text }}>{row.label}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 14.5, fontWeight: '700', color: row.color ?? colors.text, fontVariant: ['tabular-nums'] }}>
+                    {format(row.value)}
+                  </Text>
+                  <Delta current={row.value} previous={row.prev} favorableWhenUp={row.up} />
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={colors.border} style={{ marginLeft: spacing.sm }} />
+              </SheetRow>
+            ))}
+          </Sheet>
 
           {/* Trend */}
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>Income vs Expense</Text>
+          <SectionTitle title="Income vs spending" />
+          <Sheet style={{ paddingVertical: spacing.lg }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={{ width: chartWidth }}>
                 <BarChart
+                  height={120}
                   data={bucketTotals.map((b) => ({
                     label: b.label,
                     bars: [
@@ -402,117 +403,110 @@ export default function ReportsScreen() {
                 />
               </View>
             </ScrollView>
-            <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md, justifyContent: 'center' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.income }} />
-                <Text style={{ fontSize: 12, color: colors.textLight }}>Income</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.expense }} />
-                <Text style={{ fontSize: 12, color: colors.textLight }}>Expense</Text>
-              </View>
+            <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm }}>
+              {[
+                { color: colors.income, label: 'Income' },
+                { color: colors.expense, label: 'Spending' },
+              ].map((l) => (
+                <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Dot color={l.color} />
+                  <Text style={{ fontSize: 12, color: colors.textLight }}>{l.label}</Text>
+                </View>
+              ))}
             </View>
-          </Card>
+          </Sheet>
 
-          {/* Cash flow */}
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>Cash Flow</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <LineChart values={cashFlowSeries} color={colors.primary} width={chartWidth} height={90} />
-            </ScrollView>
-          </Card>
+          {/* Largest expenses */}
+          {topExpenses.length > 0 && (
+            <>
+              <SectionTitle title="Largest expenses" linkLabel="See all" onLinkPress={() => openActivity('expense')} />
+              <Sheet>
+                {topExpenses.map((t, i) => (
+                  <TransactionListItem key={t.id} transaction={t} last={i === topExpenses.length - 1} />
+                ))}
+              </Sheet>
+            </>
+          )}
 
-          {/* Forgotten Money */}
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>Forgotten Money</Text>
-            {!hasForgottenItems ? (
-              <EmptyState
-                icon="checkmark-circle-outline"
-                title="Nothing forgotten"
-                message="No stale loans, idle goals, or idle accounts right now."
-              />
-            ) : (
-              <View style={{ gap: spacing.md }}>
-                {forgottenLoans.map(({ loan, outstanding, reason }) => (
-                  <TouchableOpacity
+          {/* Needs attention */}
+          {attentionCount > 0 && (
+            <>
+              <SectionTitle title="Needs attention" />
+              <Sheet>
+                {forgottenLoans.map(({ loan, outstanding, reason }, i) => (
+                  <SheetRow
                     key={loan.id}
+                    last={i === attentionCount - 1}
                     onPress={() => router.push({ pathname: '/loans/[id]', params: { id: loan.id } })}
-                    style={rowStyle}
                   >
-                    <Ionicons name="people-outline" size={16} color={colors.expense} />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13.5, color: colors.text, fontWeight: '600' }}>{loan.personName}</Text>
-                      <Text style={{ fontSize: 11.5, color: colors.textLight }}>
-                        {reason === 'overdue' ? 'Repayment is overdue' : 'No return date — lent a while ago'}
+                      <Text style={{ fontSize: 14.5, fontWeight: '600', color: colors.text }}>{loan.personName}</Text>
+                      <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
+                        {reason === 'overdue' ? 'Repayment is overdue' : 'Lent a while ago, no return date'}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.expense }}>{format(outstanding)}</Text>
-                  </TouchableOpacity>
+                    <Text style={{ fontSize: 14.5, fontWeight: '700', color: colors.expense }}>{format(outstanding)}</Text>
+                  </SheetRow>
                 ))}
-                {idleGoalsList.map(({ goal, daysSinceUpdate }) => (
-                  <TouchableOpacity key={goal.id} onPress={() => router.push('/goals')} style={rowStyle}>
-                    <Ionicons name="flag-outline" size={16} color={colors.warning} />
+                {idleGoalsList.map(({ goal, daysSinceUpdate }, i) => (
+                  <SheetRow key={goal.id} last={forgottenLoans.length + i === attentionCount - 1} onPress={() => router.push('/goals')}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13.5, color: colors.text, fontWeight: '600' }}>{goal.name}</Text>
-                      <Text style={{ fontSize: 11.5, color: colors.textLight }}>No contribution in {daysSinceUpdate} days</Text>
+                      <Text style={{ fontSize: 14.5, fontWeight: '600', color: colors.text }}>{goal.name}</Text>
+                      <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>No contribution in {daysSinceUpdate} days</Text>
                     </View>
-                  </TouchableOpacity>
+                  </SheetRow>
                 ))}
-                {idleAccountsList.map(({ account, daysSinceActivity }) => (
-                  <TouchableOpacity
+                {idleAccountsList.map(({ account, daysSinceActivity }, i) => (
+                  <SheetRow
                     key={account.id}
+                    last={forgottenLoans.length + idleGoalsList.length + i === attentionCount - 1}
                     onPress={() => router.push({ pathname: '/accounts/[id]', params: { id: account.id } })}
-                    style={rowStyle}
                   >
-                    <Ionicons name="wallet-outline" size={16} color={colors.textLight} />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13.5, color: colors.text, fontWeight: '600' }}>{account.name}</Text>
-                      <Text style={{ fontSize: 11.5, color: colors.textLight }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '600', color: colors.text }}>{account.name}</Text>
+                      <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
                         {daysSinceActivity !== null ? `No activity in ${daysSinceActivity} days` : 'No activity since it was created'}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{format(account.balance)}</Text>
-                  </TouchableOpacity>
+                  </SheetRow>
                 ))}
-              </View>
-            )}
-          </Card>
+              </Sheet>
+            </>
+          )}
 
-          {/* Top expenses */}
-          <Card>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md }}>Top Expenses</Text>
-            {topExpenses.length === 0 ? (
-              <EmptyState icon="trending-up-outline" title="No expenses yet" message="Your largest transactions will appear here." />
-            ) : (
-              topExpenses.map((t) => (
-                <View key={t.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-                  <Text style={{ fontSize: 13.5, color: colors.text, flex: 1 }} numberOfLines={1}>
-                    {t.title}
-                  </Text>
-                  <Text style={{ fontSize: 13.5, fontWeight: '600', color: colors.expense }}>{format(t.amount)}</Text>
-                </View>
-              ))
-            )}
-          </Card>
+          {/* Net worth — private by default, like the home balance */}
+          <SectionTitle title="Net worth" />
+          <Sheet>
+            <SheetRow last onPress={() => setNetWorthRevealed((r) => !r)} onLongPress={() => router.push('/accounts')}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14.5, fontWeight: '600', color: colors.text }}>All accounts</Text>
+                <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 2 }}>
+                  {netWorthRevealed ? 'Hides again in a few seconds' : 'Tap to reveal · long-press for accounts'}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                {netWorthRevealed && !hideBalances ? format(netWorth) : MASK}
+              </Text>
+            </SheetRow>
+          </Sheet>
         </>
       ) : (
         <>
-          {/* Calendar */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.lg }}>
-            <TouchableOpacity onPress={() => setCalendarMonth((d) => shiftMonth(d, -1, dateSystem))} hitSlop={8}>
-              <Ionicons name="chevron-back" size={18} color={colors.text} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg }}>
+            <TouchableOpacity onPress={() => setCalendarMonth((d) => shiftMonth(d, -1, dateSystem))} hitSlop={10}>
+              <Ionicons name="chevron-back" size={20} color={colors.text} />
             </TouchableOpacity>
             <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{monthGrid.label}</Text>
-            <TouchableOpacity onPress={() => setCalendarMonth((d) => shiftMonth(d, 1, dateSystem))} hitSlop={8}>
-              <Ionicons name="chevron-forward" size={18} color={colors.text} />
+            <TouchableOpacity onPress={() => setCalendarMonth((d) => shiftMonth(d, 1, dateSystem))} hitSlop={10}>
+              <Ionicons name="chevron-forward" size={20} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          <Card style={{ marginBottom: spacing.lg }}>
+          <Sheet style={{ marginTop: spacing.lg, paddingVertical: spacing.md, paddingHorizontal: spacing.sm }}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {WEEKDAY_HEADERS.map((d) => (
+              {WEEKDAY_HEADERS.map((d, i) => (
                 <Text
-                  key={d}
+                  key={i}
                   style={{ width: `${100 / 7}%`, textAlign: 'center', fontSize: 11, fontWeight: '700', color: colors.textLight, marginBottom: spacing.sm }}
                 >
                   {d}
@@ -523,9 +517,6 @@ export default function ReportsScreen() {
                 const iso = cell.adIso;
                 const expense = dailyExpense[iso] ?? 0;
                 const intensity = Math.min(1, expense / maxDailyExpense);
-                const hasBill = !!billsByDate[iso];
-                const hasLoan = !!loansByDate[iso];
-                const hasIncome = dailyIncomeDates.has(iso);
                 const isToday = iso === todayISO();
                 const alpha = expense > 0 ? Math.round(30 + intensity * 170) : 0;
                 return (
@@ -536,25 +527,25 @@ export default function ReportsScreen() {
                         borderRadius: radius.sm,
                         backgroundColor: expense > 0 ? `${colors.expense}${alpha.toString(16).padStart(2, '0')}` : 'transparent',
                         borderWidth: isToday ? 1.5 : 0,
-                        borderColor: colors.primary,
+                        borderColor: colors.text,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
                     >
                       <Text style={{ fontSize: 12, fontWeight: isToday ? '800' : '500', color: colors.text }}>{cell.dayNumber}</Text>
-                      <View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
-                        {hasBill && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.warning }} />}
-                        {hasLoan && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.primary }} />}
-                        {hasIncome && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.income }} />}
+                      <View style={{ flexDirection: 'row', gap: 2, marginTop: 2, height: 4 }}>
+                        {!!billsByDate[iso] && <Dot color={colors.warning} size={4} />}
+                        {!!loansByDate[iso] && <Dot color={colors.primary} size={4} />}
+                        {dailyIncomeDates.has(iso) && <Dot color={colors.income} size={4} />}
                       </View>
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
-          </Card>
+          </Sheet>
 
-          <View style={{ flexDirection: 'row', gap: spacing.lg, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', gap: spacing.lg, justifyContent: 'center', flexWrap: 'wrap', marginTop: spacing.md }}>
             {[
               { color: colors.expense, label: 'Spending' },
               { color: colors.warning, label: 'Bill due' },
@@ -562,53 +553,87 @@ export default function ReportsScreen() {
               { color: colors.income, label: 'Income' },
             ].map((l) => (
               <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
+                <Dot color={l.color} />
                 <Text style={{ fontSize: 12, color: colors.textLight }}>{l.label}</Text>
               </View>
             ))}
           </View>
+
+          <Sheet style={{ marginTop: spacing.lg }}>
+            <SheetRow
+              last
+              onPress={() => {
+                const cells = monthGrid.cells.filter((c): c is MonthGridCell => c !== null);
+                router.push(activityHref({ range: { start: cells[0].adIso, end: cells[cells.length - 1].adIso }, type: 'expense' }));
+              }}
+            >
+              <Text style={{ flex: 1, fontSize: 14.5, color: colors.text }}>Spent in {monthGrid.label}</Text>
+              <Text style={{ fontSize: 14.5, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                {format(calendarMonthTotal)}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.border} style={{ marginLeft: spacing.sm }} />
+            </SheetRow>
+          </Sheet>
         </>
       )}
 
-      {/* Custom range modal */}
+      {/* Custom range */}
       <Modal visible={customModalOpen} transparent animationType="slide" onRequestClose={() => setCustomModalOpen(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-          onPress={() => setCustomModalOpen(false)}
-        >
-          <Pressable style={{ backgroundColor: colors.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.lg }}>Custom Range</Text>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }} onPress={() => setCustomModalOpen(false)}>
+          <Pressable
+            style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              paddingHorizontal: spacing.xl,
+              paddingTop: spacing.lg,
+              paddingBottom: insets.bottom + spacing.lg,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: spacing.lg }}>Custom range</Text>
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: colors.textLight, marginBottom: 4 }}>From</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginBottom: 6 }}>FROM</Text>
                 <DateField value={customStart} onChange={setCustomStart} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: colors.textLight, marginBottom: 4 }}>To</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginBottom: 6 }}>TO</Text>
                 <DateField value={customEnd} onChange={setCustomEnd} />
               </View>
             </View>
             <TouchableOpacity
               onPress={applyCustomRange}
-              style={{ backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' }}
+              style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
             >
-              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>Apply</Text>
+              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 15 }}>Apply</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Day detail modal */}
+      {/* Day detail */}
       <Modal visible={!!selectedDay} transparent animationType="slide" onRequestClose={() => setSelectedDay(null)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-          onPress={() => setSelectedDay(null)}
-        >
-          <Pressable style={{ backgroundColor: colors.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl, maxHeight: '78%' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>
-                {selectedDay ? formatDate(selectedDay) : ''}
-              </Text>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }} onPress={() => setSelectedDay(null)}>
+          <Pressable
+            style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              paddingHorizontal: spacing.xl,
+              paddingTop: spacing.lg,
+              paddingBottom: insets.bottom + spacing.lg,
+              maxHeight: '78%',
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{selectedDay ? formatDate(selectedDay) : ''}</Text>
+                {selectedDay && (dailyExpense[selectedDay] ?? 0) > 0 && (
+                  <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2 }}>
+                    {format(dailyExpense[selectedDay])} spent
+                  </Text>
+                )}
+              </View>
               <TouchableOpacity
                 onPress={() => {
                   const day = selectedDay;
@@ -617,29 +642,58 @@ export default function ReportsScreen() {
                 }}
                 hitSlop={8}
               >
-                <Ionicons name="add-circle" size={24} color={colors.primary} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primaryDeep }}>+ Add</Text>
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              {selectedDayBills.map((b) => (
-                <View key={b.id} style={{ ...rowStyle, marginBottom: spacing.sm }}>
-                  <Ionicons name="receipt-outline" size={16} color={colors.warning} />
-                  <Text style={{ flex: 1, fontSize: 13, color: colors.text }}>{b.title} due</Text>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{format(b.amount)}</Text>
-                </View>
-              ))}
-              {selectedDayLoans.map((l) => (
-                <View key={l.id} style={{ ...rowStyle, marginBottom: spacing.sm }}>
-                  <Ionicons name="people-outline" size={16} color={colors.primary} />
-                  <Text style={{ flex: 1, fontSize: 13, color: colors.text }}>{l.personName}&apos;s repayment due</Text>
-                </View>
-              ))}
+              {(selectedDayBills.length > 0 || selectedDayLoans.length > 0) && (
+                <Sheet style={{ marginBottom: spacing.md }}>
+                  {selectedDayBills.map((b, i) => (
+                    <SheetRow key={b.id} last={i === selectedDayBills.length - 1 && selectedDayLoans.length === 0}>
+                      <View style={{ marginRight: spacing.md }}>
+                        <Dot color={colors.warning} />
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 14, color: colors.text }}>{b.title} due</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{format(b.amount)}</Text>
+                    </SheetRow>
+                  ))}
+                  {selectedDayLoans.map((l, i) => (
+                    <SheetRow key={l.id} last={i === selectedDayLoans.length - 1}>
+                      <View style={{ marginRight: spacing.md }}>
+                        <Dot color={colors.primary} />
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 14, color: colors.text }}>{l.personName}&apos;s repayment due</Text>
+                    </SheetRow>
+                  ))}
+                </Sheet>
+              )}
               {selectedDayTransactions.length === 0 ? (
-                <EmptyState icon="receipt-outline" title="No transactions" message="Nothing recorded on this day." />
+                <Text style={{ fontSize: 14, color: colors.textLight, textAlign: 'center', paddingVertical: spacing.xl }}>
+                  Nothing recorded on this day.
+                </Text>
               ) : (
-                selectedDayTransactions.map((t) => (
-                  <TransactionListItem key={t.id} transaction={t} onDelete={removeTransaction} />
-                ))
+                <Sheet>
+                  {selectedDayTransactions.map((t, i) => (
+                    <TransactionListItem
+                      key={t.id}
+                      transaction={t}
+                      onDelete={removeTransaction}
+                      last={i === selectedDayTransactions.length - 1}
+                    />
+                  ))}
+                </Sheet>
+              )}
+              {selectedDayTransactions.length > 0 && selectedDay && (
+                <TouchableOpacity
+                  onPress={() => {
+                    const day = selectedDay;
+                    setSelectedDay(null);
+                    router.push(activityHref({ range: { start: day, end: day } }));
+                  }}
+                  style={{ alignSelf: 'center', marginTop: spacing.md, padding: spacing.sm }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primaryDeep }}>Open this day in Activity</Text>
+                </TouchableOpacity>
               )}
             </ScrollView>
           </Pressable>

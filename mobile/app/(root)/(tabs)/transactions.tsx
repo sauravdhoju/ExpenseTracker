@@ -1,92 +1,182 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
 import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
-import {
-  filterByDay,
-  filterByMonth,
-  filterByWeek,
-  getMonthlyStatement,
-} from '../../../src/services/calculations';
+import { filterByRange, getMonthlyStatement, type DateRange } from '../../../src/services/calculations';
 import { exportStatementAsCSV } from '../../../src/services/exportService';
-import { groupLabel, todayISO } from '../../../src/utils/date';
+import { todayISO } from '../../../src/utils/date';
 import { shiftMonth } from '../../../src/utils/bsDate';
+import { ranges } from '../../../src/utils/links';
 import { spacing, radius } from '../../../src/constants/theme';
-import Card from '../../../src/components/ui/Card';
 import PageHeader from '../../../src/components/ui/PageHeader';
-import EmptyState from '../../../src/components/ui/EmptyState';
 import DateField from '../../../src/components/ui/DateField';
+import Segmented from '../../../src/components/ui/Segmented';
+import { Dot, Sheet, Stat } from '../../../src/components/ui/Sheet';
 import TransactionListItem from '../../../src/components/transactions/TransactionListItem';
 import type { Transaction, TransactionType } from '../../../src/types';
 
 type SortMode = 'newest' | 'oldest' | 'highest';
 type TypeFilter = 'all' | TransactionType;
-type DateRange = 'all' | 'today' | 'week' | 'month' | 'custom';
+type Preset = 'today' | 'week' | 'month' | 'all';
 
-const GROUP_ORDER = ['Today', 'Yesterday', 'This Week', 'Earlier'] as const;
-const TYPE_FILTERS: TypeFilter[] = ['all', 'expense', 'income', 'lent', 'repayment', 'transfer'];
-const DATE_RANGES: { value: DateRange; label: string }[] = [
+const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This Week' },
-  { value: 'month', label: 'This Month' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'expense', label: 'Spent' },
+  { value: 'income', label: 'Income' },
+  { value: 'lent', label: 'Lent' },
+  { value: 'repayment', label: 'Repaid' },
+  { value: 'transfer', label: 'Transfers' },
 ];
+
+const TYPE_TOTAL_LABEL: Partial<Record<TransactionType, string>> = {
+  expense: 'Spent',
+  income: 'Received',
+  lent: 'Lent',
+  repayment: 'Repaid to you',
+  transfer: 'Transferred',
+};
+
+const PRESETS: { value: Preset; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: 'all', label: 'All' },
+];
+
+interface Filters {
+  range: DateRange | null; // null = all time
+  type: TypeFilter;
+  categoryId: string | null;
+  accountId: string | null;
+}
+
+interface RouteParams {
+  k?: string;
+  from?: string;
+  to?: string;
+  type?: string;
+  categoryId?: string;
+  accountId?: string;
+}
+
+function filtersFromParams(p: RouteParams): Filters {
+  return {
+    range: p.from && p.to ? { start: p.from, end: p.to } : null,
+    type: (TYPE_FILTERS.some((t) => t.value === p.type) ? p.type : 'all') as TypeFilter,
+    categoryId: p.categoryId ?? null,
+    accountId: p.accountId ?? null,
+  };
+}
+
+const sameRange = (a: DateRange | null, b: DateRange | null) => a?.start === b?.start && a?.end === b?.end;
+
+function Pill({ label, active, onPress, color }: { label: string; active: boolean; onPress: () => void; color?: string }) {
+  const colors = useThemeColors();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 7,
+        paddingHorizontal: 13,
+        borderRadius: radius.full,
+        borderWidth: 1,
+        borderColor: active ? colors.text : colors.border,
+        backgroundColor: active ? colors.text : colors.card,
+      }}
+    >
+      {color && <Dot color={color} size={7} />}
+      <Text style={{ fontSize: 12.5, fontWeight: '600', color: active ? colors.card : colors.text }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function FilterTag({ label, color, onClear }: { label: string; color?: string; onClear: () => void }) {
+  const colors = useThemeColors();
+  return (
+    <TouchableOpacity
+      onPress={onClear}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 5,
+        paddingLeft: 10,
+        paddingRight: 8,
+        borderRadius: radius.full,
+        backgroundColor: colors.primary + '14',
+      }}
+    >
+      {color && <Dot color={color} size={7} />}
+      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primaryDeep }}>{label}</Text>
+      <Ionicons name="close" size={13} color={colors.primaryDeep} />
+    </TouchableOpacity>
+  );
+}
 
 export default function TransactionsScreen() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { format } = useCurrency();
-  const { dateSystem, formatMonthYear } = useDateFormat();
-  const params = useLocalSearchParams<{ type?: string; categoryId?: string; accountId?: string }>();
+  const { dateSystem, format: formatDate, formatMonthYear } = useDateFormat();
+  const params = useLocalSearchParams() as RouteParams;
 
   const transactions = useAppStore((s) => s.transactions);
   const categories = useAppStore((s) => s.categories);
   const accounts = useAppStore((s) => s.accounts);
   const removeTransaction = useAppStore((s) => s.removeTransaction);
 
+  const [filters, setFilters] = useState<Filters>(() => filtersFromParams(params));
+  const [appliedKey, setAppliedKey] = useState(params.k);
   const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>((params.type as TypeFilter) ?? 'all');
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(params.categoryId ?? null);
-  const [accountFilter, setAccountFilter] = useState<string | null>(params.accountId ?? null);
   const [sortMode, setSortMode] = useState<SortMode>('newest');
-  const [dateRange, setDateRange] = useState<DateRange>('all');
-  const [customStart, setCustomStart] = useState(todayISO());
-  const [customEnd, setCustomEnd] = useState(todayISO());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
   const [statementMonth, setStatementMonth] = useState(new Date());
+  const [draftStart, setDraftStart] = useState(todayISO());
+  const [draftEnd, setDraftEnd] = useState(todayISO());
   const [isExporting, setIsExporting] = useState(false);
 
-  const dateFiltered = useMemo(() => {
-    const now = new Date();
-    if (dateRange === 'today') return filterByDay(transactions, now);
-    if (dateRange === 'week') return filterByWeek(transactions, now);
-    if (dateRange === 'month') return filterByMonth(transactions, now, dateSystem);
-    if (dateRange === 'custom') {
-      return transactions.filter((t) => t.date >= customStart && t.date <= customEnd);
-    }
-    return transactions;
-  }, [transactions, dateRange, customStart, customEnd, dateSystem]);
+  // A link from another screen carries a fresh `k`: re-apply its filter even though
+  // this tab stays mounted. (Adjusting state during render is React's recommended
+  // way to reset state from a changed prop, and avoids an extra effect pass.)
+  if (params.k !== appliedKey) {
+    setAppliedKey(params.k);
+    setFilters(filtersFromParams(params));
+    setQuery('');
+    setSortMode('newest');
+  }
+
+  const now = new Date();
+  const presetRanges: Record<Exclude<Preset, 'all'>, DateRange> = {
+    today: ranges.today(now),
+    week: ranges.week(now),
+    month: ranges.month(now, dateSystem),
+  };
+  const activePreset: Preset | null =
+    filters.range === null
+      ? 'all'
+      : ((['today', 'week', 'month'] as const).find((p) => sameRange(filters.range, presetRanges[p])) ?? null);
+
+  const setPreset = (p: Preset) => setFilters((f) => ({ ...f, range: p === 'all' ? null : presetRanges[p] }));
+  const update = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
 
   const filtered = useMemo(() => {
-    let result: Transaction[] = dateFiltered;
-
-    if (typeFilter !== 'all') {
-      result = result.filter((t) => t.type === typeFilter);
+    let result: Transaction[] = filters.range ? filterByRange(transactions, filters.range) : transactions;
+    if (filters.type !== 'all') result = result.filter((t) => t.type === filters.type);
+    if (filters.categoryId) result = result.filter((t) => t.categoryId === filters.categoryId);
+    if (filters.accountId) {
+      result = result.filter((t) => t.accountId === filters.accountId || t.toAccountId === filters.accountId);
     }
-    if (categoryFilter) {
-      result = result.filter((t) => t.categoryId === categoryFilter);
-    }
-    if (accountFilter) {
-      result = result.filter((t) => t.accountId === accountFilter || t.toAccountId === accountFilter);
-    }
-
-    if (query.trim().length > 0) {
-      const q = query.trim().toLowerCase();
+    const q = query.trim().toLowerCase();
+    if (q) {
       result = result.filter((t) => {
         const category = categories.find((c) => c.id === t.categoryId)?.name ?? '';
         const account = accounts.find((a) => a.id === t.accountId)?.name ?? '';
@@ -99,41 +189,54 @@ export default function TransactionsScreen() {
         );
       });
     }
-
-    const sorted = [...result].sort((a, b) => {
+    return [...result].sort((a, b) => {
       if (sortMode === 'highest') return b.amount - a.amount;
-      const cmp = a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt);
+      const cmp = a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.createdAt.localeCompare(b.createdAt);
       return sortMode === 'oldest' ? cmp : -cmp;
     });
+  }, [transactions, filters, query, sortMode, categories, accounts]);
 
-    return sorted;
-  }, [dateFiltered, typeFilter, categoryFilter, accountFilter, query, sortMode, categories, accounts]);
+  const totals = useMemo(() => {
+    const sum = (type: TransactionType) => filtered.filter((t) => t.type === type).reduce((s, t) => s + t.amount, 0);
+    return { spent: sum('expense'), income: sum('income'), single: filters.type !== 'all' ? sum(filters.type) : 0 };
+  }, [filtered, filters.type]);
 
-  const sections = useMemo(() => {
-    const groups: Record<string, Transaction[]> = {};
+  // Group by day (newest/oldest) so each day reads as one sheet with its own spend total.
+  const groups = useMemo(() => {
+    if (sortMode === 'highest') return [{ key: 'highest', title: 'Largest first', spent: 0, items: filtered }];
+    const out: { key: string; title: string; spent: number; items: Transaction[] }[] = [];
     for (const t of filtered) {
-      const label = groupLabel(t.date);
-      if (!groups[label]) groups[label] = [];
-      groups[label].push(t);
+      let g = out[out.length - 1];
+      if (!g || g.key !== t.date) {
+        g = { key: t.date, title: formatDate(t.date), spent: 0, items: [] };
+        out.push(g);
+      }
+      g.items.push(t);
+      if (t.type === 'expense') g.spent += t.amount;
     }
-    return GROUP_ORDER.filter((g) => groups[g]?.length).map((g) => ({
-      title: g,
-      data: groups[g],
-    }));
-  }, [filtered]);
-
-  const flatData = useMemo(
-    () => sections.flatMap((s) => [{ header: s.title }, ...s.data]),
-    [sections]
-  );
+    return out;
+  }, [filtered, sortMode, formatDate]);
 
   const statement = useMemo(
     () => getMonthlyStatement(transactions, accounts, statementMonth, dateSystem),
     [transactions, accounts, statementMonth, dateSystem]
   );
 
-  const activeFilterCount =
-    (categoryFilter ? 1 : 0) + (accountFilter ? 1 : 0) + (dateRange !== 'all' ? 1 : 0);
+  const category = categories.find((c) => c.id === filters.categoryId);
+  const account = accounts.find((a) => a.id === filters.accountId);
+  const isCustomRange = filters.range !== null && activePreset === null;
+  const rangeLabel =
+    filters.range === null
+      ? 'All time'
+      : filters.range.start === filters.range.end
+        ? formatDate(filters.range.start)
+        : `${formatDate(filters.range.start)} – ${formatDate(filters.range.end)}`;
+
+  const openFilters = () => {
+    setDraftStart(filters.range?.start ?? todayISO());
+    setDraftEnd(filters.range?.end ?? todayISO());
+    setFiltersOpen(true);
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -146,283 +249,272 @@ export default function TransactionsScreen() {
     }
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
-      <PageHeader
-        title="Transactions"
-        subtitle={`${filtered.length} ${filtered.length === 1 ? 'transaction' : 'transactions'}`}
-        actions={[
-          { icon: 'calendar-outline', onPress: () => setStatementOpen((v) => !v) },
-          { icon: 'options-outline', onPress: () => setFiltersOpen(true) },
-          { icon: isExporting ? 'hourglass-outline' : 'share-outline', onPress: handleExport },
-        ]}
-      />
-
+  const header = (
+    <View>
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: colors.card,
+          borderWidth: 1,
+          borderColor: colors.border,
           borderRadius: radius.md,
           paddingHorizontal: spacing.md,
           marginBottom: spacing.md,
         }}
       >
-        <Ionicons name="search" size={18} color={colors.textLight} />
+        <Ionicons name="search" size={17} color={colors.textLight} />
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search title, category, account, amount..."
+          placeholder="Search title, category, account, amount"
           placeholderTextColor={colors.textLight}
-          style={{ flex: 1, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.sm, color: colors.text }}
+          style={{ flex: 1, paddingVertical: 11, paddingHorizontal: spacing.sm, color: colors.text, fontSize: 14 }}
         />
         {query.length > 0 && (
           <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-            <Ionicons name="close-circle" size={18} color={colors.textLight} />
+            <Ionicons name="close-circle" size={17} color={colors.textLight} />
           </TouchableOpacity>
         )}
       </View>
 
-      {statementOpen && (
-        <Card style={{ marginBottom: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
-            <TouchableOpacity onPress={() => setStatementMonth((d) => shiftMonth(d, -1, dateSystem))} hitSlop={8}>
-              <Ionicons name="chevron-back" size={18} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>
-              {formatMonthYear(statementMonth)}
-            </Text>
-            <TouchableOpacity onPress={() => setStatementMonth((d) => shiftMonth(d, 1, dateSystem))} hitSlop={8}>
-              <Ionicons name="chevron-forward" size={18} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          {[
-            { label: 'Opening Balance', value: statement.openingBalance, color: colors.text },
-            { label: 'Income', value: statement.income, color: colors.income, sign: '+' },
-            { label: 'Expenses', value: statement.expenses, color: colors.expense, sign: '-' },
-            { label: 'Money Lent', value: statement.lent, color: colors.expense, sign: '-' },
-            { label: 'Money Repaid', value: statement.repaid, color: colors.income, sign: '+' },
-          ].map((row) => (
-            <View key={row.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-              <Text style={{ fontSize: 13, color: colors.textLight }}>{row.label}</Text>
-              <Text style={{ fontSize: 13.5, fontWeight: '600', color: row.color }}>
-                {row.sign ?? ''}
-                {format(row.value)}
-              </Text>
-            </View>
-          ))}
-          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.sm }} />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Closing Balance</Text>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{format(statement.closingBalance)}</Text>
-          </View>
-        </Card>
+      <Segmented options={PRESETS} value={activePreset} onChange={setPreset} />
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginHorizontal: -spacing.xl, marginTop: spacing.md }}
+        contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.xl }}
+      >
+        {TYPE_FILTERS.map((t) => (
+          <Pill key={t.value} label={t.label} active={filters.type === t.value} onPress={() => update({ type: t.value })} />
+        ))}
+      </ScrollView>
+
+      {(isCustomRange || category || account) && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md }}>
+          {isCustomRange && <FilterTag label={rangeLabel} onClear={() => update({ range: null })} />}
+          {category && <FilterTag label={category.name} color={category.color} onClear={() => update({ categoryId: null })} />}
+          {account && <FilterTag label={account.name} onClear={() => update({ accountId: null })} />}
+        </View>
       )}
 
-      <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={TYPE_FILTERS}
-          keyExtractor={(t) => t}
-          contentContainerStyle={{ gap: spacing.sm }}
-          renderItem={({ item: type }) => (
-            <TouchableOpacity
-              onPress={() => setTypeFilter(type)}
+      {/* Totals for exactly what's listed below — these match the figure that linked here. */}
+      <Sheet style={{ marginTop: spacing.lg, paddingVertical: spacing.md }}>
+        {filters.type !== 'all' ? (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+            <Stat label={`${TYPE_TOTAL_LABEL[filters.type] ?? 'Total'} · ${rangeLabel}`} value={format(totals.single)} />
+            <Text style={{ fontSize: 12.5, color: colors.textLight }}>
+              {filtered.length} {filtered.length === 1 ? 'entry' : 'entries'}
+            </Text>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row' }}>
+            <Stat label="Spent" value={format(totals.spent)} />
+            <Stat label="Income" value={format(totals.income)} color={colors.income} align="center" />
+            <Stat label="Entries" value={String(filtered.length)} align="flex-end" />
+          </View>
+        )}
+      </Sheet>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.xl, paddingTop: spacing.lg }}>
+      <PageHeader
+        title="Activity"
+        subtitle={rangeLabel}
+        actions={[
+          { icon: 'options-outline', onPress: openFilters },
+          { icon: 'document-text-outline', onPress: () => setStatementOpen(true) },
+          { icon: isExporting ? 'hourglass-outline' : 'share-outline', onPress: handleExport },
+        ]}
+      />
+
+      <FlatList
+        data={groups}
+        keyExtractor={(g) => g.key}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          <Text style={{ fontSize: 14, color: colors.textLight, textAlign: 'center', marginTop: spacing.xxl }}>
+            {query ? 'Nothing matches that search.' : 'No transactions for this filter.'}
+          </Text>
+        }
+        renderItem={({ item: g }) => (
+          <View>
+            <View
               style={{
-                paddingVertical: 6,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.full,
-                backgroundColor: typeFilter === type ? colors.primary : colors.card,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                marginTop: spacing.xl,
+                marginBottom: spacing.sm,
               }}
             >
-              <Text
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: '600',
-                  color: typeFilter === type ? colors.white : colors.text,
-                  textTransform: 'capitalize',
-                }}
-              >
-                {type}
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, textTransform: 'uppercase' }}>
+                {g.title}
               </Text>
-            </TouchableOpacity>
-          )}
-        />
-        <TouchableOpacity
-          onPress={() =>
-            setSortMode((m) => (m === 'newest' ? 'oldest' : m === 'oldest' ? 'highest' : 'newest'))
-          }
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 4,
-            paddingVertical: 6,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.full,
-            backgroundColor: colors.card,
-          }}
-        >
-          <Ionicons name="swap-vertical" size={14} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      {activeFilterCount > 0 && (
-        <TouchableOpacity
-          onPress={() => {
-            setCategoryFilter(null);
-            setAccountFilter(null);
-            setDateRange('all');
-          }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.md, alignSelf: 'flex-start' }}
-        >
-          <Ionicons name="close-circle" size={14} color={colors.primary} />
-          <Text style={{ fontSize: 12.5, color: colors.primary, fontWeight: '600' }}>
-            Clear {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filters'}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {filtered.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon="receipt-outline"
-            title="No transactions found"
-            message={query ? 'Try a different search term.' : 'No transactions match these filters.'}
-          />
-        </Card>
-      ) : (
-        <FlatList
-          data={flatData}
-          keyExtractor={(item, index) => ('header' in item ? `h-${item.header}` : item.id) + index}
-          renderItem={({ item }) =>
-            'header' in item ? (
-              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textLight, marginTop: spacing.md, marginBottom: 4 }}>
-                {item.header}
-              </Text>
-            ) : (
-              <Card style={{ marginBottom: spacing.sm, paddingVertical: spacing.xs }}>
-                <TransactionListItem transaction={item} onDelete={removeTransaction} />
-              </Card>
-            )
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 130 }}
-        />
-      )}
-
-      <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-          onPress={() => setFiltersOpen(false)}
-        >
-          <Pressable style={{ backgroundColor: colors.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl, maxHeight: '80%' }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.lg }}>Filters</Text>
-
-            <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.sm }}>Date range</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md }}>
-              {DATE_RANGES.map((r) => (
-                <TouchableOpacity
-                  key={r.value}
-                  onPress={() => setDateRange(r.value)}
-                  style={{
-                    paddingVertical: 7,
-                    paddingHorizontal: 12,
-                    borderRadius: radius.full,
-                    backgroundColor: dateRange === r.value ? colors.primary : colors.background,
-                  }}
-                >
-                  <Text style={{ fontSize: 12.5, fontWeight: '600', color: dateRange === r.value ? colors.white : colors.text }}>
-                    {r.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {g.spent > 0 && (
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textLight, fontVariant: ['tabular-nums'] }}>
+                  {format(g.spent)} spent
+                </Text>
+              )}
             </View>
-            {dateRange === 'custom' && (
-              <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
+            <Sheet>
+              {g.items.map((t, i) => (
+                <TransactionListItem
+                  key={t.id}
+                  transaction={t}
+                  onDelete={removeTransaction}
+                  last={i === g.items.length - 1}
+                  showCategory={!filters.categoryId}
+                />
+              ))}
+            </Sheet>
+          </View>
+        )}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 130 }}
+      />
+
+      {/* Filters */}
+      <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }} onPress={() => setFiltersOpen(false)}>
+          <Pressable
+            style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              paddingHorizontal: spacing.xl,
+              paddingTop: spacing.lg,
+              paddingBottom: insets.bottom + spacing.lg,
+              maxHeight: '85%',
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>Filters</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setFilters({ range: null, type: 'all', categoryId: null, accountId: null });
+                  setSortMode('newest');
+                }}
+                hitSlop={8}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primaryDeep }}>Reset</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginBottom: spacing.sm }}>
+                SORT
+              </Text>
+              <Segmented
+                options={[
+                  { value: 'newest', label: 'Newest' },
+                  { value: 'oldest', label: 'Oldest' },
+                  { value: 'highest', label: 'Largest' },
+                ]}
+                value={sortMode}
+                onChange={setSortMode}
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginTop: spacing.xl, marginBottom: spacing.sm }}>
+                CUSTOM DATES
+              </Text>
+              <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: colors.textLight, marginBottom: 4 }}>From</Text>
-                  <DateField value={customStart} onChange={setCustomStart} />
+                  <DateField value={draftStart} onChange={setDraftStart} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: colors.textLight, marginBottom: 4 }}>To</Text>
-                  <DateField value={customEnd} onChange={setCustomEnd} />
+                  <DateField value={draftEnd} onChange={setDraftEnd} />
                 </View>
               </View>
-            )}
-
-            <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.sm }}>Category</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md }}>
               <TouchableOpacity
-                onPress={() => setCategoryFilter(null)}
-                style={{
-                  paddingVertical: 7,
-                  paddingHorizontal: 12,
-                  borderRadius: radius.full,
-                  backgroundColor: categoryFilter === null ? colors.primary : colors.background,
-                }}
+                onPress={() =>
+                  update({ range: draftStart <= draftEnd ? { start: draftStart, end: draftEnd } : { start: draftEnd, end: draftStart } })
+                }
+                style={{ alignSelf: 'flex-start', marginTop: spacing.sm }}
               >
-                <Text style={{ fontSize: 12.5, fontWeight: '600', color: categoryFilter === null ? colors.white : colors.text }}>
-                  Any
-                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primaryDeep }}>Apply these dates</Text>
               </TouchableOpacity>
-              {categories.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  onPress={() => setCategoryFilter(c.id)}
-                  style={{
-                    paddingVertical: 7,
-                    paddingHorizontal: 12,
-                    borderRadius: radius.full,
-                    backgroundColor: categoryFilter === c.id ? c.color : colors.background,
-                  }}
-                >
-                  <Text style={{ fontSize: 12.5, fontWeight: '600', color: categoryFilter === c.id ? colors.white : colors.text }}>
-                    {c.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
-            <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.sm }}>Payment method</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl }}>
-              <TouchableOpacity
-                onPress={() => setAccountFilter(null)}
-                style={{
-                  paddingVertical: 7,
-                  paddingHorizontal: 12,
-                  borderRadius: radius.full,
-                  backgroundColor: accountFilter === null ? colors.primary : colors.background,
-                }}
-              >
-                <Text style={{ fontSize: 12.5, fontWeight: '600', color: accountFilter === null ? colors.white : colors.text }}>
-                  Any
-                </Text>
-              </TouchableOpacity>
-              {accounts.map((a) => (
-                <TouchableOpacity
-                  key={a.id}
-                  onPress={() => setAccountFilter(a.id)}
-                  style={{
-                    paddingVertical: 7,
-                    paddingHorizontal: 12,
-                    borderRadius: radius.full,
-                    backgroundColor: accountFilter === a.id ? colors.primary : colors.background,
-                  }}
-                >
-                  <Text style={{ fontSize: 12.5, fontWeight: '600', color: accountFilter === a.id ? colors.white : colors.text }}>
-                    {a.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginTop: spacing.xl, marginBottom: spacing.sm }}>
+                CATEGORY
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                <Pill label="Any" active={filters.categoryId === null} onPress={() => update({ categoryId: null })} />
+                {categories.map((c) => (
+                  <Pill key={c.id} label={c.name} color={c.color} active={filters.categoryId === c.id} onPress={() => update({ categoryId: c.id })} />
+                ))}
+              </View>
+
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginTop: spacing.xl, marginBottom: spacing.sm }}>
+                ACCOUNT
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl }}>
+                <Pill label="Any" active={filters.accountId === null} onPress={() => update({ accountId: null })} />
+                {accounts.map((a) => (
+                  <Pill key={a.id} label={a.name} active={filters.accountId === a.id} onPress={() => update({ accountId: a.id })} />
+                ))}
+              </View>
+            </ScrollView>
 
             <TouchableOpacity
               onPress={() => setFiltersOpen(false)}
-              style={{ backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' }}
+              style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
             >
-              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>Apply</Text>
+              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 15 }}>
+                Show {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
+              </Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Monthly statement */}
+      <Modal visible={statementOpen} transparent animationType="slide" onRequestClose={() => setStatementOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }} onPress={() => setStatementOpen(false)}>
+          <Pressable
+            style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              paddingHorizontal: spacing.xl,
+              paddingTop: spacing.lg,
+              paddingBottom: insets.bottom + spacing.lg,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
+              <TouchableOpacity onPress={() => setStatementMonth((d) => shiftMonth(d, -1, dateSystem))} hitSlop={10}>
+                <Ionicons name="chevron-back" size={20} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{formatMonthYear(statementMonth)} statement</Text>
+              <TouchableOpacity onPress={() => setStatementMonth((d) => shiftMonth(d, 1, dateSystem))} hitSlop={10}>
+                <Ionicons name="chevron-forward" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Sheet>
+              {[
+                { label: 'Opening balance', value: format(statement.openingBalance), color: colors.text },
+                { label: 'Income', value: `+${format(statement.income)}`, color: colors.income },
+                { label: 'Expenses', value: `−${format(statement.expenses)}`, color: colors.text },
+                { label: 'Money lent', value: `−${format(statement.lent)}`, color: colors.text },
+                { label: 'Money repaid', value: `+${format(statement.repaid)}`, color: colors.income },
+              ].map((row) => (
+                <View
+                  key={row.label}
+                  style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}
+                >
+                  <Text style={{ fontSize: 14, color: colors.textLight }}>{row.label}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: row.color, fontVariant: ['tabular-nums'] }}>{row.value}</Text>
+                </View>
+              ))}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 14 }}>
+                <Text style={{ fontSize: 14.5, fontWeight: '800', color: colors.text }}>Closing balance</Text>
+                <Text style={{ fontSize: 14.5, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                  {format(statement.closingBalance)}
+                </Text>
+              </View>
+            </Sheet>
           </Pressable>
         </Pressable>
       </Modal>

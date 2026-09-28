@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../../src/hooks/useThemeColors';
@@ -7,21 +8,20 @@ import { useCurrency } from '../../../src/hooks/useCurrency';
 import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { filterByMonth, getBudgetEngineSummary, getBudgetUsage } from '../../../src/services/calculations';
+import { activityHref, ranges } from '../../../src/utils/links';
 import { CURRENCIES } from '../../../src/constants/currencies';
 import { spacing, radius } from '../../../src/constants/theme';
-import Card from '../../../src/components/ui/Card';
 import PageHeader from '../../../src/components/ui/PageHeader';
 import ProgressBar from '../../../src/components/ui/ProgressBar';
-import EmptyState from '../../../src/components/ui/EmptyState';
-import IconCircle from '../../../src/components/ui/IconCircle';
 import Button from '../../../src/components/ui/Button';
-import DonutChart from '../../../src/components/charts/DonutChart';
+import { Dot, SectionTitle, Sheet, SheetRow, Stat } from '../../../src/components/ui/Sheet';
 
 export default function BudgetsScreen() {
   const colors = useThemeColors();
   const { format, currency } = useCurrency();
   const { dateSystem, formatMonthYear } = useDateFormat();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const budgets = useAppStore((s) => s.budgets);
   const categories = useAppStore((s) => s.categories);
   const transactions = useAppStore((s) => s.transactions);
@@ -33,7 +33,7 @@ export default function BudgetsScreen() {
   const [amount, setAmount] = useState('');
 
   const now = useMemo(() => new Date(), []);
-  const periodLabel = formatMonthYear(now);
+  const monthRange = ranges.month(now, dateSystem);
   const monthTransactions = useMemo(
     () => filterByMonth(transactions, now, dateSystem),
     [transactions, now, dateSystem]
@@ -42,15 +42,14 @@ export default function BudgetsScreen() {
   const usedCategoryIds = new Set(budgets.filter((b) => b.categoryId).map((b) => b.categoryId));
 
   const overall = budgets.find((b) => b.categoryId === null) ?? null;
-  const categoryBudgets = budgets.filter((b) => b.categoryId !== null);
+  const categoryBudgets = budgets
+    .filter((b) => b.categoryId !== null)
+    .map((b) => ({ budget: b, usage: getBudgetUsage(b, monthTransactions) }))
+    .sort((a, b) => b.usage.percentUsed - a.usage.percentUsed);
 
-  const overallSummary = overall
-    ? getBudgetEngineSummary(overall.amount, transactions, now, dateSystem)
-    : null;
-  const overallPercent = overallSummary && overall && overall.amount > 0
-    ? (overallSummary.spentThisMonth / overall.amount) * 100
-    : 0;
-  const overallExceeded = !!overallSummary && overallSummary.spentThisMonth > (overall?.amount ?? 0);
+  const summary = overall ? getBudgetEngineSummary(overall.amount, transactions, now, dateSystem) : null;
+  const overallPercent = summary && overall && overall.amount > 0 ? (summary.spentThisMonth / overall.amount) * 100 : 0;
+  const overallExceeded = !!summary && summary.remainingThisMonth < 0;
 
   const openNew = () => {
     setCategoryId(null);
@@ -64,10 +63,11 @@ export default function BudgetsScreen() {
     setModalVisible(true);
   };
 
-  const confirmDelete = (id: string) => {
-    Alert.alert('Delete budget', 'Remove this budget?', [
+  const manage = (id: string, catId: string | null, existingAmount: number, name: string) => {
+    Alert.alert(name, undefined, [
+      { text: 'Edit amount', onPress: () => openEdit(catId, existingAmount) },
+      { text: 'Delete budget', style: 'destructive', onPress: () => removeBudget(id) },
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => removeBudget(id) },
     ]);
   };
 
@@ -82,13 +82,14 @@ export default function BudgetsScreen() {
   };
 
   const pickableCategories = expenseCategories.filter((c) => !usedCategoryIds.has(c.id) || c.id === categoryId);
+  const monthSpending = activityHref({ range: monthRange, type: 'expense' });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ padding: spacing.lg, paddingBottom: 0 }}>
+      <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg }}>
         <PageHeader
           title="Budgets"
-          subtitle={periodLabel}
+          subtitle={formatMonthYear(now)}
           rightContent={
             <TouchableOpacity
               onPress={openNew}
@@ -96,345 +97,218 @@ export default function BudgetsScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
-                backgroundColor: colors.primary,
+                backgroundColor: colors.text,
                 paddingVertical: 9,
                 paddingHorizontal: 14,
                 borderRadius: radius.full,
               }}
             >
-              <Ionicons name="add" size={16} color={colors.white} />
-              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 13 }}>Add</Text>
+              <Ionicons name="add" size={16} color={colors.card} />
+              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 13 }}>New</Text>
             </TouchableOpacity>
           }
         />
       </View>
 
-      {budgets.length === 0 ? (
-        <View style={{ paddingHorizontal: spacing.lg }}>
-          <Card>
-            <EmptyState
-              icon="pie-chart-outline"
-              title="No budgets created"
-              message="Set a monthly limit to see how much you can safely spend, by category or overall."
-              actionLabel="Create Budget"
-              onAction={openNew}
-            />
-          </Card>
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: spacing.lg, paddingTop: spacing.md, paddingBottom: 130 }}
-        >
-          {/* Overall budget hero card */}
-          {overall && overallSummary ? (
-            <Card style={{ marginBottom: spacing.xl }}>
-              <TouchableOpacity
-                onLongPress={() => confirmDelete(overall.id)}
-                onPress={() => openEdit(null, overall.amount)}
-                activeOpacity={0.8}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <IconCircle name="wallet-outline" color={colors.primary} size={30} iconSize={15} />
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Overall Budget</Text>
-                  </View>
-                  <Ionicons name="create-outline" size={18} color={colors.textLight} />
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xl }}>
-                  <DonutChart
-                    size={112}
-                    strokeWidth={12}
-                    data={
-                      overallExceeded
-                        ? [{ value: 1, color: colors.expense }]
-                        : [
-                            { value: overallSummary.spentThisMonth, color: colors.primary },
-                            { value: Math.max(overall.amount - overallSummary.spentThisMonth, 0), color: colors.border },
-                          ]
-                    }
-                  >
-                    <Text style={{ fontSize: 19, fontWeight: '800', color: overallExceeded ? colors.expense : colors.text }}>
-                      {Math.round(overallPercent)}%
-                    </Text>
-                    <Text style={{ fontSize: 10.5, color: colors.textLight }}>used</Text>
-                  </DonutChart>
-
-                  <View style={{ flex: 1, gap: 9 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 12.5, color: colors.textLight }}>Spent</Text>
-                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.text }}>
-                        {format(overallSummary.spentThisMonth)}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 12.5, color: colors.textLight }}>Budget</Text>
-                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.text }}>{format(overall.amount)}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 12.5, color: colors.textLight }}>
-                        {overallExceeded ? 'Over by' : 'Remaining'}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 13.5,
-                          fontWeight: '700',
-                          color: overallExceeded ? colors.expense : colors.income,
-                        }}
-                      >
-                        {format(Math.abs(overallSummary.remainingThisMonth))}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md }} />
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View>
-                    <Text style={{ fontSize: 11.5, color: colors.textLight }}>Safe to spend today</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, marginTop: 1 }}>
-                      {format(overallSummary.safeToSpendToday)}
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 11.5, color: colors.textLight }}>
-                    {Math.max(overallSummary.daysRemainingInMonth, 0)} {overallSummary.daysRemainingInMonth === 1 ? 'day' : 'days'} left
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </Card>
-          ) : (
-            <TouchableOpacity onPress={openNew} activeOpacity={0.8} style={{ marginBottom: spacing.xl }}>
-              <View
-                style={{
-                  borderWidth: 1.5,
-                  borderStyle: 'dashed',
-                  borderColor: colors.border,
-                  borderRadius: radius.lg,
-                  padding: spacing.lg,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.md,
-                }}
-              >
-                <IconCircle name="wallet-outline" color={colors.primary} size={40} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Set an overall budget</Text>
-                  <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 1 }}>
-                    Track total monthly spending and your safe-to-spend amount.
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 130 }}
+      >
+        {/* Overall */}
+        <SectionTitle
+          first
+          title="This month"
+          linkLabel={overall ? 'Edit' : undefined}
+          onLinkPress={overall ? () => openEdit(null, overall.amount) : undefined}
+        />
+        {overall && summary ? (
+          <Sheet style={{ paddingVertical: spacing.lg }}>
+            <TouchableOpacity activeOpacity={0.6} onPress={() => router.push(monthSpending)}>
+              <Text style={{ fontSize: 12, color: colors.textLight }}>Spent</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
+                <Text style={{ fontSize: 26, fontWeight: '800', color: overallExceeded ? colors.expense : colors.text, fontVariant: ['tabular-nums'] }}>
+                  {format(summary.spentThisMonth)}
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: overallExceeded ? colors.expense : colors.textLight }}>
+                  {Math.round(overallPercent)}%
+                </Text>
               </View>
+              <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2, marginBottom: spacing.md }}>
+                of {format(overall.amount)} budget
+              </Text>
+              <ProgressBar percent={overallPercent} height={6} />
             </TouchableOpacity>
-          )}
 
-          {/* Category budgets */}
-          {categoryBudgets.length > 0 && (
-            <Text
-              style={{
-                fontSize: 11.5,
-                fontWeight: '700',
-                color: colors.textLight,
-                textTransform: 'uppercase',
-                letterSpacing: 0.6,
-                marginBottom: spacing.md,
-              }}
-            >
-              Category Budgets
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.lg }} />
+
+            <View style={{ flexDirection: 'row' }}>
+              <Stat
+                label={overallExceeded ? 'Over by' : 'Left'}
+                value={format(Math.abs(summary.remainingThisMonth))}
+                color={overallExceeded ? colors.expense : colors.income}
+              />
+              <Stat
+                label="Safe per day"
+                value={format(summary.safeToSpendToday)}
+                align="center"
+              />
+              <Stat
+                label="Days left"
+                value={String(Math.max(summary.daysRemainingInMonth, 0))}
+                align="flex-end"
+              />
+            </View>
+          </Sheet>
+        ) : (
+          <Sheet style={{ paddingVertical: spacing.xl, alignItems: 'center' }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>No monthly budget yet</Text>
+            <Text style={{ fontSize: 13, color: colors.textLight, marginTop: 4, textAlign: 'center', marginBottom: spacing.lg }}>
+              Set one to get a safe amount to spend each day.
             </Text>
-          )}
-          {categoryBudgets.map((budget) => {
-            const category = categories.find((c) => c.id === budget.categoryId);
-            const usage = getBudgetUsage(budget, monthTransactions);
-            const barColor = usage.isExceeded ? colors.expense : (category?.color ?? colors.primary);
-            return (
-              <Card key={budget.id} style={{ marginBottom: spacing.md }}>
-                <TouchableOpacity
-                  onLongPress={() => confirmDelete(budget.id)}
-                  onPress={() => openEdit(budget.categoryId, budget.amount)}
-                  activeOpacity={0.8}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md }}>
-                    <IconCircle
-                      name={(category?.icon as any) ?? 'pricetag'}
-                      color={category?.color ?? colors.textLight}
-                      size={38}
-                      iconSize={17}
-                    />
+            <Button label="Set monthly budget" onPress={openNew} style={{ paddingHorizontal: spacing.xl }} />
+          </Sheet>
+        )}
+
+        {/* By category */}
+        {categoryBudgets.length > 0 && (
+          <>
+            <SectionTitle title="By category" />
+            <Sheet>
+              {categoryBudgets.map(({ budget, usage }, i) => {
+                const category = categories.find((c) => c.id === budget.categoryId);
+                const name = category?.name ?? 'Category';
+                const barColor = usage.isExceeded ? colors.expense : (category?.color ?? colors.primary);
+                return (
+                  <SheetRow
+                    key={budget.id}
+                    last={i === categoryBudgets.length - 1}
+                    onPress={() => router.push(activityHref({ range: monthRange, type: 'expense', categoryId: budget.categoryId }))}
+                    onLongPress={() => manage(budget.id, budget.categoryId, budget.amount, name)}
+                  >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14.5, fontWeight: '600', color: colors.text }} numberOfLines={1}>
-                        {category?.name ?? 'Category'}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 1 }}>
-                        {format(usage.spent)} of {format(budget.amount)}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ marginRight: spacing.md }}>
+                          <Dot color={category?.color ?? colors.textLight} />
+                        </View>
+                        <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: colors.text }} numberOfLines={1}>
+                          {name}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 14.5,
+                            fontWeight: '700',
+                            color: usage.isExceeded ? colors.expense : colors.text,
+                            fontVariant: ['tabular-nums'],
+                          }}
+                        >
+                          {format(usage.spent)}
+                        </Text>
+                      </View>
+                      <View style={{ marginLeft: 20, marginTop: 8 }}>
+                        <ProgressBar percent={usage.percentUsed} color={barColor} height={4} />
+                        <Text style={{ fontSize: 12, color: usage.isExceeded ? colors.expense : colors.textLight, marginTop: 6 }}>
+                          {usage.isExceeded
+                            ? `${format(-usage.remaining)} over ${format(budget.amount)}`
+                            : `${format(usage.remaining)} left of ${format(budget.amount)}`}
+                        </Text>
+                      </View>
                     </View>
-                    <View
-                      style={{
-                        paddingVertical: 3,
-                        paddingHorizontal: 8,
-                        borderRadius: radius.full,
-                        backgroundColor: `${barColor}1F`,
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: barColor }}>
-                        {Math.round(usage.percentUsed)}%
-                      </Text>
-                    </View>
-                  </View>
-                  <ProgressBar percent={usage.percentUsed} color={barColor} />
-                  {usage.isExceeded && (
-                    <Text style={{ fontSize: 11.5, color: colors.expense, marginTop: spacing.sm, fontWeight: '600' }}>
-                      {format(Math.abs(usage.remaining))} over budget
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </Card>
-            );
-          })}
-        </ScrollView>
-      )}
+                  </SheetRow>
+                );
+              })}
+            </Sheet>
+            <Text style={{ fontSize: 12, color: colors.textLight, textAlign: 'center', marginTop: spacing.md }}>
+              Tap to see the spending · long-press to edit or delete
+            </Text>
+          </>
+        )}
+      </ScrollView>
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-          onPress={() => setModalVisible(false)}
-        >
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }} onPress={() => setModalVisible(false)}>
           <Pressable
             style={{
-              backgroundColor: colors.card,
+              backgroundColor: colors.background,
               borderTopLeftRadius: radius.xl,
               borderTopRightRadius: radius.xl,
               paddingHorizontal: spacing.xl,
-              paddingTop: spacing.sm,
+              paddingTop: spacing.lg,
               paddingBottom: insets.bottom + spacing.lg,
             }}
           >
-            <View
-              style={{
-                width: 40,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: colors.border,
-                alignSelf: 'center',
-                marginBottom: spacing.lg,
-              }}
-            />
-
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
-                {categoryId ? 'Category Budget' : 'Overall Budget'}
+              <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>
+                {categoryId ? 'Category budget' : 'Monthly budget'}
               </Text>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                hitSlop={10}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 15,
-                  backgroundColor: colors.background,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Ionicons name="close" size={16} color={colors.textLight} />
+              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={10}>
+                <Ionicons name="close" size={20} color={colors.textLight} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 12.5, color: colors.textLight, marginBottom: spacing.sm, fontWeight: '600' }}>
-              CATEGORY
+            <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginBottom: spacing.sm }}>
+              APPLIES TO
             </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg }}>
-              <TouchableOpacity
-                onPress={() => setCategoryId(null)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  paddingVertical: 7,
-                  paddingLeft: 7,
-                  paddingRight: 12,
-                  borderRadius: radius.full,
-                  backgroundColor: categoryId === null ? colors.primary : colors.background,
-                }}
-              >
-                <IconCircle
-                  name="wallet-outline"
-                  color={categoryId === null ? colors.white : colors.primary}
-                  size={24}
-                  iconSize={12}
-                />
-                <Text style={{ color: categoryId === null ? colors.white : colors.text, fontWeight: '600', fontSize: 13 }}>
-                  Overall
-                </Text>
-              </TouchableOpacity>
-              {pickableCategories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setCategoryId(cat.id)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingVertical: 7,
-                    paddingLeft: 7,
-                    paddingRight: 12,
-                    borderRadius: radius.full,
-                    backgroundColor: categoryId === cat.id ? cat.color : colors.background,
-                  }}
-                >
-                  <IconCircle
-                    name={cat.icon as any}
-                    color={categoryId === cat.id ? colors.white : cat.color}
-                    size={24}
-                    iconSize={12}
-                  />
-                  <Text style={{ color: categoryId === cat.id ? colors.white : colors.text, fontWeight: '600', fontSize: 13 }}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl }}>
+              {[{ id: null as string | null, name: 'Everything', color: colors.primary }, ...pickableCategories].map((c) => {
+                const active = categoryId === c.id;
+                return (
+                  <TouchableOpacity
+                    key={c.id ?? 'overall'}
+                    onPress={() => setCategoryId(c.id)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      paddingVertical: 7,
+                      paddingHorizontal: 13,
+                      borderRadius: radius.full,
+                      borderWidth: 1,
+                      borderColor: active ? colors.text : colors.border,
+                      backgroundColor: active ? colors.text : colors.card,
+                    }}
+                  >
+                    <Dot color={c.color} size={7} />
+                    <Text style={{ color: active ? colors.card : colors.text, fontWeight: '600', fontSize: 12.5 }}>{c.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            <Text style={{ fontSize: 12.5, color: colors.textLight, marginBottom: spacing.sm, fontWeight: '600' }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: colors.textLight, marginBottom: spacing.sm }}>
               MONTHLY AMOUNT
             </Text>
             <View
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: colors.background,
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
                 borderRadius: radius.md,
                 paddingHorizontal: spacing.md,
                 marginBottom: spacing.xl,
               }}
             >
-              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textLight, marginRight: 6 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: colors.textLight, marginRight: 6 }}>
                 {CURRENCIES[currency].symbol}
               </Text>
               <TextInput
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="decimal-pad"
-                placeholder="0.00"
+                placeholder="0"
                 placeholderTextColor={colors.textLight}
                 autoFocus
-                style={{
-                  flex: 1,
-                  fontSize: 22,
-                  fontWeight: '700',
-                  color: colors.text,
-                  paddingVertical: spacing.md,
-                }}
+                style={{ flex: 1, fontSize: 22, fontWeight: '700', color: colors.text, paddingVertical: spacing.md }}
               />
             </View>
 
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Button label="Cancel" variant="secondary" style={{ flex: 1 }} onPress={() => setModalVisible(false)} />
-              <Button label="Save" style={{ flex: 1 }} onPress={handleSave} />
-            </View>
+            <TouchableOpacity
+              onPress={handleSave}
+              style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 15 }}>Save budget</Text>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
