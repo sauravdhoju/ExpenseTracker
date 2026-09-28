@@ -36,7 +36,7 @@ export default function Segmented<T extends string>({ options, value, onChange }
               backgroundColor: active ? colors.card : 'transparent',
             }}
           >
-            <Text style={{ fontSize: 12.5, fontWeight: active ? '700' : '600', color: active ? colors.text : colors.textLight }}>
+            <Text style={{ fontSize: 12.5, fontWeight: active ? '700' : '600', color: active ? colors.primary : colors.textLight }}>
               {o.label}
             </Text>
           </TouchableOpacity>

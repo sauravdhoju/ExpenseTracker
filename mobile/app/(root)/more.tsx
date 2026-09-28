@@ -1,9 +1,9 @@
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { spacing, radius } from '../../src/constants/theme';
-import Card from '../../src/components/ui/Card';
+import { brand, spacing } from '../../src/constants/theme';
+import { SectionTitle, Sheet, SheetRow } from '../../src/components/ui/Sheet';
 import PageHeader from '../../src/components/ui/PageHeader';
 import { useAppStore } from '../../src/store/useAppStore';
 import { APP_INFO } from '../../src/constants/appInfo';
@@ -29,99 +29,28 @@ function Section({
   const colors = useThemeColors();
 
   return (
-    <View style={{ marginBottom: spacing.xl }}>
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: '700',
-          color: colors.textLight,
-          marginBottom: spacing.sm,
-          textTransform: 'uppercase',
-          letterSpacing: 0.6,
-        }}
-      >
-        {title}
-      </Text>
-
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
+    <View>
+      <SectionTitle title={title} />
+      <Sheet>
         {rows.map((row, i) => (
-          <TouchableOpacity
-            key={row.label}
-            onPress={row.onPress}
-            disabled={!row.onPress}
-            activeOpacity={0.65}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: spacing.md,
-              paddingHorizontal: spacing.lg,
-              borderBottomWidth: i === rows.length - 1 ? 0 : 1,
-              borderBottomColor: colors.border,
-              opacity: row.future ? 0.6 : 1,
-            }}
-          >
-            <View
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: `${row.tint ?? tint}1C`,
-                marginRight: spacing.md,
-              }}
-            >
-              <Ionicons name={row.icon} size={17} color={row.tint ?? tint} />
+          <SheetRow key={row.label} last={i === rows.length - 1} onPress={row.future ? undefined : row.onPress}>
+            <View style={{ width: 24, alignItems: 'center', marginRight: spacing.md, opacity: row.future ? 0.5 : 1 }}>
+              <Ionicons name={row.icon} size={20} color={row.tint ?? tint} />
             </View>
-
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{ fontSize: 15, fontWeight: '600', color: colors.text }}
-              >
-                {row.label}
-              </Text>
+            <View style={{ flex: 1, opacity: row.future ? 0.6 : 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>{row.label}</Text>
               {row.description ? (
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: colors.textLight,
-                    marginTop: 1,
-                  }}
-                >
-                  {row.description}
-                </Text>
+                <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 1 }}>{row.description}</Text>
               ) : null}
             </View>
-
             {row.future ? (
-              <View
-                style={{
-                  paddingVertical: 3,
-                  paddingHorizontal: 8,
-                  borderRadius: radius.full,
-                  backgroundColor: colors.background,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 10.5,
-                    fontWeight: '700',
-                    color: colors.textLight,
-                  }}
-                >
-                  SOON
-                </Text>
-              </View>
+              <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 0.6, color: colors.textLight }}>SOON</Text>
             ) : row.onPress ? (
-              <Ionicons
-                name="chevron-forward"
-                size={17}
-                color={colors.textLight}
-              />
+              <Ionicons name="chevron-forward" size={16} color={colors.border} />
             ) : null}
-          </TouchableOpacity>
+          </SheetRow>
         ))}
-      </Card>
+      </Sheet>
     </View>
   );
 }
@@ -135,7 +64,7 @@ export default function MoreScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: spacing.lg, paddingBottom: 130 }}
+      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: 130 }}
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
@@ -192,7 +121,7 @@ export default function MoreScreen() {
 
       <Section
         title="Automation"
-        tint={colors.income}
+        tint={brand.skySoft}
         rows={[
           {
             icon: 'flash-outline',
@@ -216,7 +145,7 @@ export default function MoreScreen() {
 
       <Section
         title="Preferences"
-        tint={colors.income}
+        tint={colors.primaryDeep}
         rows={[
           {
             icon: 'cash-outline',
@@ -238,7 +167,7 @@ export default function MoreScreen() {
 
       <Section
         title="Data & Security"
-        tint={colors.warning}
+        tint={colors.expense}
         rows={[
           {
             icon: 'shield-checkmark-outline',

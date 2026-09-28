@@ -294,13 +294,13 @@ export default function CategoriesScreen() {
               onPress={handleCreate}
               style={{
                 marginTop: spacing.lg,
-                backgroundColor: name.trim() ? colors.text : colors.border,
+                backgroundColor: name.trim() ? colors.primary : colors.border,
                 borderRadius: radius.md,
                 paddingVertical: 14,
                 alignItems: 'center',
               }}
             >
-              <Text style={{ color: name.trim() ? colors.card : colors.textLight, fontWeight: '700', fontSize: 15 }}>
+              <Text style={{ color: name.trim() ? colors.white : colors.textLight, fontWeight: '700', fontSize: 15 }}>
                 Create category
               </Text>
             </TouchableOpacity>

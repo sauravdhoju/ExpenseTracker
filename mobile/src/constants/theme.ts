@@ -24,11 +24,15 @@ export const brand = {
   blueBright: '#2790EE',
   blueLight: '#74BBED',
   blueDeep: '#1450C8',
+  /** Softer sky blues derived from blueBright, used as the app's working primary. */
+  sky: '#2790EE',
+  skyDeep: '#1E7FDB',
+  skySoft: '#5AAEF2',
 };
 
 export const lightColors: ThemeColors = {
-  primary: brand.blue,
-  primaryDeep: brand.blueDeep,
+  primary: brand.sky,
+  primaryDeep: brand.skyDeep,
   background: '#F4F6FB',
   surface: '#FFFFFF',
   card: '#FFFFFF',
@@ -43,7 +47,7 @@ export const lightColors: ThemeColors = {
 };
 
 export const darkColors: ThemeColors = {
-  primary: brand.blueBright,
+  primary: brand.skySoft,
   primaryDeep: brand.blueLight,
   background: '#0B1220',
   surface: '#141D2E',

@@ -527,7 +527,7 @@ export default function ReportsScreen() {
                         borderRadius: radius.sm,
                         backgroundColor: expense > 0 ? `${colors.expense}${alpha.toString(16).padStart(2, '0')}` : 'transparent',
                         borderWidth: isToday ? 1.5 : 0,
-                        borderColor: colors.text,
+                        borderColor: colors.primary,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -603,9 +603,9 @@ export default function ReportsScreen() {
             </View>
             <TouchableOpacity
               onPress={applyCustomRange}
-              style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
+              style={{ backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
             >
-              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 15 }}>Apply</Text>
+              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>Apply</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>

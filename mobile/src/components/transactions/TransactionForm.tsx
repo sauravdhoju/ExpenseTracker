@@ -117,11 +117,11 @@ function AccountPills({
                 paddingHorizontal: 13,
                 borderRadius: radius.full,
                 borderWidth: 1,
-                borderColor: active ? colors.text : colors.border,
-                backgroundColor: active ? colors.text : colors.card,
+                borderColor: active ? colors.primary : colors.border,
+                backgroundColor: active ? colors.primary : colors.card,
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '600', color: active ? colors.card : colors.text }}>{a.name}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: active ? colors.white : colors.text }}>{a.name}</Text>
             </TouchableOpacity>
           );
         })}
@@ -427,11 +427,11 @@ export default function TransactionForm({ mode, initial, onSubmit, onDelete }: P
                       paddingHorizontal: 11,
                       borderRadius: radius.full,
                       borderWidth: 1,
-                      borderColor: active ? colors.text : colors.border,
-                      backgroundColor: active ? colors.text : colors.card,
+                      borderColor: active ? colors.primary : colors.border,
+                      backgroundColor: active ? colors.primary : colors.card,
                     }}
                   >
-                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: active ? colors.card : colors.text }}>{d.label}</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: active ? colors.white : colors.text }}>{d.label}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -508,13 +508,13 @@ export default function TransactionForm({ mode, initial, onSubmit, onDelete }: P
           disabled={isSaving}
           accessibilityRole="button"
           style={{
-            backgroundColor: missing ? colors.border : colors.text,
+            backgroundColor: missing ? colors.border : colors.primary,
             borderRadius: radius.md,
             paddingVertical: 15,
             alignItems: 'center',
           }}
         >
-          <Text style={{ color: missing ? colors.textLight : colors.card, fontWeight: '700', fontSize: 15 }}>
+          <Text style={{ color: missing ? colors.textLight : colors.white, fontWeight: '700', fontSize: 15 }}>
             {isSaving ? 'Saving…' : saveLabel}
           </Text>
         </TouchableOpacity>

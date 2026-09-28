@@ -88,12 +88,12 @@ function Pill({ label, active, onPress, color }: { label: string; active: boolea
         paddingHorizontal: 13,
         borderRadius: radius.full,
         borderWidth: 1,
-        borderColor: active ? colors.text : colors.border,
-        backgroundColor: active ? colors.text : colors.card,
+        borderColor: active ? colors.primary : colors.border,
+        backgroundColor: active ? colors.primary : colors.card,
       }}
     >
       {color && <Dot color={color} size={7} />}
-      <Text style={{ fontSize: 12.5, fontWeight: '600', color: active ? colors.card : colors.text }}>{label}</Text>
+      <Text style={{ fontSize: 12.5, fontWeight: '600', color: active ? colors.white : colors.text }}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -460,9 +460,9 @@ export default function TransactionsScreen() {
 
             <TouchableOpacity
               onPress={() => setFiltersOpen(false)}
-              style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
+              style={{ backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
             >
-              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 15 }}>
+              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>
                 Show {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
               </Text>
             </TouchableOpacity>

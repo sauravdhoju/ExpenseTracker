@@ -97,14 +97,14 @@ export default function BudgetsScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
-                backgroundColor: colors.text,
+                backgroundColor: colors.primary,
                 paddingVertical: 9,
                 paddingHorizontal: 14,
                 borderRadius: radius.full,
               }}
             >
               <Ionicons name="add" size={16} color={colors.card} />
-              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 13 }}>New</Text>
+              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 13 }}>New</Text>
             </TouchableOpacity>
           }
         />
@@ -263,12 +263,12 @@ export default function BudgetsScreen() {
                       paddingHorizontal: 13,
                       borderRadius: radius.full,
                       borderWidth: 1,
-                      borderColor: active ? colors.text : colors.border,
-                      backgroundColor: active ? colors.text : colors.card,
+                      borderColor: active ? colors.primary : colors.border,
+                      backgroundColor: active ? colors.primary : colors.card,
                     }}
                   >
                     <Dot color={c.color} size={7} />
-                    <Text style={{ color: active ? colors.card : colors.text, fontWeight: '600', fontSize: 12.5 }}>{c.name}</Text>
+                    <Text style={{ color: active ? colors.white : colors.text, fontWeight: '600', fontSize: 12.5 }}>{c.name}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -305,9 +305,9 @@ export default function BudgetsScreen() {
 
             <TouchableOpacity
               onPress={handleSave}
-              style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
+              style={{ backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' }}
             >
-              <Text style={{ color: colors.card, fontWeight: '700', fontSize: 15 }}>Save budget</Text>
+              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>Save budget</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>

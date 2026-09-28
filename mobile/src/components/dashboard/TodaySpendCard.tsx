@@ -190,8 +190,8 @@ export default function TodaySpendCard({ now }: { now: Date }) {
         borderRadius: 14,
         padding: spacing.lg,
         overflow: 'hidden',
-        backgroundColor: brand.blue,
-        shadowColor: brand.blue,
+        backgroundColor: brand.sky,
+        shadowColor: brand.sky,
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.24,
         shadowRadius: 14,
@@ -206,9 +206,9 @@ export default function TodaySpendCard({ now }: { now: Date }) {
         >
           <Defs>
             <LinearGradient id="heroGradient" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={brand.blueDeep} />
-              <Stop offset="0.55" stopColor={brand.blue} />
-              <Stop offset="1" stopColor={brand.blueBright} />
+              <Stop offset="0" stopColor={brand.skyDeep} />
+              <Stop offset="0.55" stopColor={brand.sky} />
+              <Stop offset="1" stopColor={brand.skySoft} />
             </LinearGradient>
           </Defs>
           <Rect
