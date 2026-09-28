@@ -7,14 +7,14 @@ import { useThemeColors } from '../../../src/hooks/useThemeColors';
 import { useCurrency } from '../../../src/hooks/useCurrency';
 import { useDateFormat } from '../../../src/hooks/useDateFormat';
 import { useAppStore } from '../../../src/store/useAppStore';
-import { filterByMonth, getBudgetEngineSummary, getBudgetUsage } from '../../../src/services/calculations';
+import { filterByMonth, getBudgetEngineSummary, getBudgetUsage, getDayOfMonth } from '../../../src/services/calculations';
 import { activityHref, ranges } from '../../../src/utils/links';
 import { CURRENCIES } from '../../../src/constants/currencies';
 import { spacing, radius } from '../../../src/constants/theme';
 import PageHeader from '../../../src/components/ui/PageHeader';
-import ProgressBar from '../../../src/components/ui/ProgressBar';
 import Button from '../../../src/components/ui/Button';
-import { Dot, SectionTitle, Sheet, SheetRow, Stat } from '../../../src/components/ui/Sheet';
+import Ring from '../../../src/components/ui/Ring';
+import { Dot, SectionTitle, Sheet, Stat } from '../../../src/components/ui/Sheet';
 
 export default function BudgetsScreen() {
   const colors = useThemeColors();
@@ -50,6 +50,18 @@ export default function BudgetsScreen() {
   const summary = overall ? getBudgetEngineSummary(overall.amount, transactions, now, dateSystem) : null;
   const overallPercent = summary && overall && overall.amount > 0 ? (summary.spentThisMonth / overall.amount) * 100 : 0;
   const overallExceeded = !!summary && summary.remainingThisMonth < 0;
+
+  const ringColor = (percent: number) =>
+    percent >= 100 ? colors.expense : percent >= 85 ? colors.warning : colors.primary;
+
+  // Pace: compare the share of budget used with the share of the month that has passed.
+  const dayOfMonth = getDayOfMonth(now, dateSystem);
+  const monthElapsed = summary ? (dayOfMonth / (dayOfMonth + summary.daysRemainingInMonth - 1)) * 100 : 0;
+  const pace = overallExceeded
+    ? 'Over this month’s budget'
+    : overallPercent > monthElapsed + 5
+      ? `Ahead of pace · ${Math.round(monthElapsed)}% of month gone`
+      : `On track · ${Math.round(monthElapsed)}% of month gone`;
 
   const openNew = () => {
     setCategoryId(null);
@@ -123,20 +135,35 @@ export default function BudgetsScreen() {
         />
         {overall && summary ? (
           <Sheet style={{ paddingVertical: spacing.lg }}>
-            <TouchableOpacity activeOpacity={0.6} onPress={() => router.push(monthSpending)}>
-              <Text style={{ fontSize: 12, color: colors.textLight }}>Spent</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
-                <Text style={{ fontSize: 26, fontWeight: '800', color: overallExceeded ? colors.expense : colors.text, fontVariant: ['tabular-nums'] }}>
-                  {format(summary.spentThisMonth)}
-                </Text>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: overallExceeded ? colors.expense : colors.textLight }}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push(monthSpending)}
+              style={{ flexDirection: 'row', alignItems: 'center' }}
+            >
+              <Ring percent={overallPercent} size={128} stroke={11} color={ringColor(overallPercent)}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: ringColor(overallPercent) }}>
                   {Math.round(overallPercent)}%
                 </Text>
+                <Text style={{ fontSize: 11, color: colors.textLight }}>used</Text>
+              </Ring>
+              <View style={{ flex: 1, marginLeft: spacing.lg }}>
+                <Text style={{ fontSize: 12, color: colors.textLight }}>Spent</Text>
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: '800',
+                    color: overallExceeded ? colors.expense : colors.text,
+                    marginTop: 2,
+                    fontVariant: ['tabular-nums'],
+                  }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {format(summary.spentThisMonth)}
+                </Text>
+                <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2 }}>of {format(overall.amount)}</Text>
+                <Text style={{ fontSize: 12, color: colors.textLight, marginTop: spacing.sm, lineHeight: 17 }}>{pace}</Text>
               </View>
-              <Text style={{ fontSize: 12.5, color: colors.textLight, marginTop: 2, marginBottom: spacing.md }}>
-                of {format(overall.amount)} budget
-              </Text>
-              <ProgressBar percent={overallPercent} height={6} />
             </TouchableOpacity>
 
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.lg }} />
@@ -173,50 +200,56 @@ export default function BudgetsScreen() {
         {categoryBudgets.length > 0 && (
           <>
             <SectionTitle title="By category" />
-            <Sheet>
-              {categoryBudgets.map(({ budget, usage }, i) => {
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+              {categoryBudgets.map(({ budget, usage }) => {
                 const category = categories.find((c) => c.id === budget.categoryId);
                 const name = category?.name ?? 'Category';
-                const barColor = usage.isExceeded ? colors.expense : (category?.color ?? colors.primary);
+                const color = usage.isExceeded ? colors.expense : (category?.color ?? colors.primary);
                 return (
-                  <SheetRow
+                  <TouchableOpacity
                     key={budget.id}
-                    last={i === categoryBudgets.length - 1}
+                    activeOpacity={0.7}
                     onPress={() => router.push(activityHref({ range: monthRange, type: 'expense', categoryId: budget.categoryId }))}
                     onLongPress={() => manage(budget.id, budget.categoryId, budget.amount, name)}
+                    style={{
+                      width: '47.5%',
+                      flexGrow: 1,
+                      alignItems: 'center',
+                      backgroundColor: colors.card,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: radius.md,
+                      paddingVertical: spacing.lg,
+                      paddingHorizontal: spacing.md,
+                    }}
                   >
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={{ marginRight: spacing.md }}>
-                          <Dot color={category?.color ?? colors.textLight} />
-                        </View>
-                        <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: colors.text }} numberOfLines={1}>
-                          {name}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 14.5,
-                            fontWeight: '700',
-                            color: usage.isExceeded ? colors.expense : colors.text,
-                            fontVariant: ['tabular-nums'],
-                          }}
-                        >
-                          {format(usage.spent)}
-                        </Text>
-                      </View>
-                      <View style={{ marginLeft: 20, marginTop: 8 }}>
-                        <ProgressBar percent={usage.percentUsed} color={barColor} height={4} />
-                        <Text style={{ fontSize: 12, color: usage.isExceeded ? colors.expense : colors.textLight, marginTop: 6 }}>
-                          {usage.isExceeded
-                            ? `${format(-usage.remaining)} over ${format(budget.amount)}`
-                            : `${format(usage.remaining)} left of ${format(budget.amount)}`}
-                        </Text>
-                      </View>
-                    </View>
-                  </SheetRow>
+                    <Ring percent={usage.percentUsed} size={68} stroke={7} color={color}>
+                      <Ionicons name={(category?.icon ?? 'pricetag') as keyof typeof Ionicons.glyphMap} size={16} color={color} />
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginTop: 1 }}>
+                        {Math.round(usage.percentUsed)}%
+                      </Text>
+                    </Ring>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginTop: spacing.md }} numberOfLines={1}>
+                      {name}
+                    </Text>
+                    <Text
+                      style={{ fontSize: 12.5, fontWeight: '600', color: colors.text, marginTop: 3, fontVariant: ['tabular-nums'] }}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {format(usage.spent)}
+                    </Text>
+                    <Text
+                      style={{ fontSize: 11.5, color: usage.isExceeded ? colors.expense : colors.textLight, marginTop: 2 }}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {usage.isExceeded ? `${format(-usage.remaining)} over` : `${format(usage.remaining)} left`}
+                    </Text>
+                  </TouchableOpacity>
                 );
               })}
-            </Sheet>
+            </View>
             <Text style={{ fontSize: 12, color: colors.textLight, textAlign: 'center', marginTop: spacing.md }}>
               Tap to see the spending · long-press to edit or delete
             </Text>
