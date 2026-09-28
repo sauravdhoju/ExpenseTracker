@@ -1,0 +1,353 @@
+import { useMemo, useState } from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
+import { useRouter } from 'expo-router';
+import { useCurrency } from '../../hooks/useCurrency';
+import { useDateFormat } from '../../hooks/useDateFormat';
+import { useAppStore } from '../../store/useAppStore';
+import {
+  filterByDay,
+  filterByWeek,
+  getBudgetEngineSummary,
+  getTotalExpenses,
+} from '../../services/calculations';
+import { addDays, toISODate } from '../../utils/date';
+import { radius, spacing } from '../../constants/theme';
+import { MASK, formatCompact, splitAmount } from './money';
+
+const USUAL_DAY_WINDOW = 30;
+const RING_SIZE = 68;
+const RING_STROKE = 6;
+
+const WHITE = '#FFFFFF';
+const WHITE_MUTED = 'rgba(255,255,255,0.72)';
+const GLASS = 'rgba(255,255,255,0.13)';
+
+function LimitRing({ percent }: { percent: number }) {
+  const r = (RING_SIZE - RING_STROKE) / 2;
+  const circumference = 2 * Math.PI * r;
+  const clamped = Math.min(Math.max(percent, 0), 100);
+  const over = percent > 100;
+  return (
+    <View
+      style={{
+        width: RING_SIZE,
+        height: RING_SIZE,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Svg
+        width={RING_SIZE}
+        height={RING_SIZE}
+        style={{ position: 'absolute' }}
+      >
+        <Circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={r}
+          stroke="rgba(255,255,255,0.18)"
+          strokeWidth={RING_STROKE}
+          fill="none"
+        />
+        <Circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={r}
+          stroke={over ? '#FCA5A5' : WHITE}
+          strokeWidth={RING_STROKE}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={circumference * (1 - clamped / 100)}
+          transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+        />
+      </Svg>
+      <Text style={{ color: WHITE, fontSize: 15, fontWeight: '800' }}>
+        {Math.round(percent)}%
+      </Text>
+      <Text style={{ color: WHITE_MUTED, fontSize: 9 }}>of limit</Text>
+    </View>
+  );
+}
+
+function StripStat({
+  label,
+  value,
+  divider,
+}: {
+  label: string;
+  value: string;
+  divider?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        borderLeftWidth: divider ? 1 : 0,
+        borderLeftColor: 'rgba(255,255,255,0.14)',
+        paddingHorizontal: 4,
+      }}
+    >
+      <Text style={{ color: WHITE_MUTED, fontSize: 11 }}>{label}</Text>
+      <Text
+        style={{ color: WHITE, fontSize: 13.5, fontWeight: '700', marginTop: 2 }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+export default function TodaySpendCard({ now }: { now: Date }) {
+  const { hideBalances, currency } = useCurrency();
+  const { dateSystem } = useDateFormat();
+  const router = useRouter();
+  const transactions = useAppStore((s) => s.transactions);
+  const budgets = useAppStore((s) => s.budgets);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  const today = useMemo(
+    () => filterByDay(transactions, now),
+    [transactions, now]
+  );
+  const spentToday = getTotalExpenses(today);
+  const spentThisWeek = useMemo(
+    () => getTotalExpenses(filterByWeek(transactions, now)),
+    [transactions, now]
+  );
+
+  // "Usual day" = average daily spend over the previous 30 days, excluding today.
+  const usualDay = useMemo(() => {
+    const todayIso = toISODate(now);
+    const from = addDays(todayIso, -USUAL_DAY_WINDOW);
+    const history = transactions.filter(
+      (t) => t.type === 'expense' && t.date >= from && t.date < todayIso
+    );
+    return history.length === 0
+      ? null
+      : getTotalExpenses(history) / USUAL_DAY_WINDOW;
+  }, [transactions, now]);
+
+  const overall = budgets.find((b) => b.categoryId === null);
+  const budget = overall
+    ? getBudgetEngineSummary(overall.amount, transactions, now, dateSystem)
+    : null;
+  const limitPercent = budget
+    ? budget.safeToSpendToday > 0
+      ? (spentToday / budget.safeToSpendToday) * 100
+      : spentToday > 0
+        ? 101
+        : 0
+    : null;
+
+  const money = (n: number) =>
+    hideBalances ? '••••' : formatCompact(n, currency);
+  const amount = splitAmount(spentToday, currency);
+
+  let comparison: { text: string; good: boolean } | null = null;
+  if (spentToday === 0) {
+    comparison = { text: 'No spending yet today', good: true };
+  } else if (usualDay !== null && usualDay > 0) {
+    const diff = ((spentToday - usualDay) / usualDay) * 100;
+    comparison =
+      Math.abs(diff) < 5
+        ? { text: 'Right on your usual day', good: true }
+        : {
+            text: `${Math.abs(diff).toFixed(0)}% ${diff < 0 ? 'below' : 'above'} your usual day`,
+            good: diff < 0,
+          };
+  }
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.92}
+      onPress={() => router.push('/(root)/(tabs)/transactions')}
+      onLayout={(e) =>
+        setSize({
+          width: e.nativeEvent.layout.width,
+          height: e.nativeEvent.layout.height,
+        })
+      }
+      style={{
+        borderRadius: 14,
+        padding: spacing.lg,
+        overflow: 'hidden',
+        backgroundColor: '#0369A1',
+        shadowColor: '#0369A1',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.24,
+        shadowRadius: 14,
+        elevation: 6,
+      }}
+    >
+      {size.width > 0 && (
+        <Svg
+          width={size.width}
+          height={size.height}
+          style={{ position: 'absolute', top: 0, left: 0 }}
+        >
+          <Defs>
+            <LinearGradient id="heroGradient" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#0B3B5E" />
+              <Stop offset="0.55" stopColor="#0369A1" />
+              <Stop offset="1" stopColor="#0EA5E9" />
+            </LinearGradient>
+          </Defs>
+          <Rect
+            width={size.width}
+            height={size.height}
+            fill="url(#heroGradient)"
+          />
+          <Circle
+            cx={size.width - 40}
+            cy={20}
+            r={110}
+            fill="rgba(255,255,255,0.07)"
+          />
+          <Circle
+            cx={size.width - 110}
+            cy={size.height + 10}
+            r={70}
+            fill="rgba(255,255,255,0.05)"
+          />
+        </Svg>
+      )}
+
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <View style={{ flex: 1, marginRight: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ color: WHITE_MUTED, fontSize: 13, fontWeight: '600' }}>
+              Spent today
+            </Text>
+            <TouchableOpacity
+              hitSlop={12}
+              onPress={() => updateSettings({ hideBalances: !hideBalances })}
+              accessibilityRole="button"
+              accessibilityLabel={hideBalances ? 'Show amounts' : 'Hide amounts'}
+            >
+              <Ionicons
+                name={hideBalances ? 'eye-off-outline' : 'eye-outline'}
+                size={15}
+                color={WHITE_MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+          {hideBalances ? (
+            <Text
+              style={{
+                color: WHITE,
+                fontSize: 34,
+                fontWeight: '800',
+              }}
+            >
+              {MASK}
+            </Text>
+          ) : (
+            <Text
+              style={{ color: WHITE }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              <Text
+                style={{ fontSize: 14, fontWeight: '600', color: WHITE_MUTED }}
+              >
+                {amount.symbol}{' '}
+              </Text>
+              <Text
+                style={{ fontSize: 36, fontWeight: '800', letterSpacing: -1.2 }}
+              >
+                {amount.whole}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: '700',
+                  color: 'rgba(255,255,255,0.55)',
+                }}
+              >
+                {amount.decimal}
+              </Text>
+            </Text>
+          )}
+          {comparison && (
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                marginTop: 6,
+                paddingVertical: 3,
+                paddingHorizontal: 9,
+                borderRadius: radius.full,
+                backgroundColor: comparison.good
+                  ? 'rgba(74,222,128,0.18)'
+                  : 'rgba(248,113,113,0.22)',
+              }}
+            >
+              {spentToday > 0 && (
+                <Ionicons
+                  name={comparison.good ? 'trending-down' : 'trending-up'}
+                  size={13}
+                  color={comparison.good ? '#BBF7D0' : '#FECACA'}
+                />
+              )}
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: comparison.good ? '#BBF7D0' : '#FECACA',
+                }}
+              >
+                {comparison.text}
+              </Text>
+            </View>
+          )}
+        </View>
+        {limitPercent !== null && <LimitRing percent={limitPercent} />}
+      </View>
+
+      <View
+        style={{
+          flexDirection: 'row',
+          marginTop: 14,
+          backgroundColor: GLASS,
+          borderRadius: 10,
+          paddingVertical: 8,
+        }}
+      >
+        {budget ? (
+          <StripStat
+            label={budget.remainingToday < 0 ? 'Over today' : 'Left today'}
+            value={money(Math.abs(budget.remainingToday))}
+          />
+        ) : (
+          <StripStat
+            label="Usual day"
+            value={usualDay !== null ? money(usualDay) : '—'}
+          />
+        )}
+        <StripStat label="Entries" value={String(today.length)} divider />
+        <StripStat label="This week" value={money(spentThisWeek)} divider />
+      </View>
+    </TouchableOpacity>
+  );
+}

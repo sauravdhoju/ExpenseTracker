@@ -9,7 +9,7 @@ export default function Card({ style, ...rest }: ViewProps) {
       style={[
         {
           backgroundColor: colors.card,
-          borderRadius: radius.lg,
+          borderRadius: radius.md,
           padding: spacing.lg,
           shadowColor: colors.shadow,
           shadowOffset: { width: 0, height: 1 },

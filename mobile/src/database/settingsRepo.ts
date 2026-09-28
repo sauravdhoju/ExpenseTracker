@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   automationAutoCategorize: true,
   automationAutoCreate: true,
   automationReviewUncertain: true,
+  homeSections: ['todayActivity'],
 };
 
 export async function getSetting<K extends keyof AppSettings>(

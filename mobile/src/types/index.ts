@@ -171,6 +171,19 @@ export type ReminderFrequency = 'daily' | 'weekly' | 'monthly';
 
 export type DateSystem = 'AD' | 'BS';
 
+export type DashboardWidgetId =
+  | 'todayActivity'
+  | 'quickAdd'
+  | 'week'
+  | 'month'
+  | 'budget'
+  | 'bills'
+  | 'goals'
+  | 'owed'
+  | 'streak'
+  | 'insights'
+  | 'balance';
+
 export interface AppSettings {
   currency: CurrencyCode;
   themeMode: ThemeMode;
@@ -198,6 +211,7 @@ export interface AppSettings {
   automationAutoCategorize: boolean;
   automationAutoCreate: boolean; // create high-confidence transactions without review
   automationReviewUncertain: boolean; // send medium-confidence detections to the Review Inbox
+  homeSections: DashboardWidgetId[]; // optional home-screen sections shown below "Where it went", in order
 }
 
 export interface CategorySpending {

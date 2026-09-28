@@ -2,24 +2,24 @@ import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { spacing } from '../../constants/theme';
-import Card from '../ui/Card';
+import SectionCard from './SectionCard';
 import type { Insight } from '../../services/insightService';
 
 export default function InsightCard({ insights }: { insights: Insight[] }) {
   const colors = useThemeColors();
-  if (insights.length === 0) return null;
 
   return (
-    <Card style={{ marginBottom: spacing.lg }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md }}>
-        <Ionicons name="bulb" size={18} color={colors.warning} />
-        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>Insights</Text>
-      </View>
-      {insights.map((insight) => (
-        <Text key={insight.id} style={{ fontSize: 13.5, color: colors.textLight, lineHeight: 19, marginBottom: spacing.xs }}>
-          • {insight.text}
-        </Text>
-      ))}
-    </Card>
+    <SectionCard title="Insights">
+      {insights.length === 0 ? (
+        <Text style={{ fontSize: 13, color: colors.textLight }}>Keep tracking - insights appear as your history grows.</Text>
+      ) : (
+        insights.map((insight) => (
+          <View key={insight.id} style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
+            <Ionicons name="bulb-outline" size={15} color={colors.warning} style={{ marginTop: 2 }} />
+            <Text style={{ flex: 1, fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{insight.text}</Text>
+          </View>
+        ))
+      )}
+    </SectionCard>
   );
 }
