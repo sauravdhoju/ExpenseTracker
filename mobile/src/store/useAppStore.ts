@@ -14,6 +14,9 @@ import * as loanRepo from '../database/loanRepo';
 import * as loanRepaymentRepo from '../database/loanRepaymentRepo';
 import * as forgottenRepo from '../database/forgottenRepo';
 import * as dailyTrackingRepo from '../database/dailyTrackingRepo';
+import * as automationRepo from '../database/automationRepo';
+import * as automationService from '../automation/automationService';
+import type { DetectedTransaction } from '../automation/types';
 import { processDueRecurringTransactions } from '../services/recurringService';
 import { getBudgetUsage, getCurrentStreak, STREAK_MILESTONES, trackedDatesSet } from '../services/calculations';
 import { sendBudgetWarning, scheduleLoanReminder, cancelLoanReminder } from '../services/notificationService';
@@ -53,6 +56,7 @@ interface AppState {
   repayments: LoanRepayment[];
   forgottenEntries: ForgottenEntry[];
   dailyTracking: DailyTracking[];
+  pendingDetections: DetectedTransaction[];
   settings: AppSettings;
 
   bootstrap: () => Promise<void>;
@@ -108,6 +112,11 @@ interface AppState {
   markTodayTracked: () => Promise<void>;
   applyGraceDay: () => Promise<void>;
 
+  processAutomationQueue: () => Promise<void>;
+  confirmDetection: (id: string, input: automationService.ConfirmDetectionInput) => Promise<void>;
+  ignoreDetection: (id: string) => Promise<void>;
+  undoDetection: (id: string) => Promise<boolean>;
+
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>;
 }
 
@@ -127,6 +136,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   repayments: [],
   forgottenEntries: [],
   dailyTracking: [],
+  pendingDetections: [],
   settings: settingsRepo.DEFAULT_SETTINGS,
 
   bootstrap: async () => {
@@ -135,7 +145,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       await initDatabase();
       await categoryRepo.seedDefaultCategories();
       await processDueRecurringTransactions();
+      // Anything the background listeners queued while the headless task couldn't run.
+      await automationService.drainAutomationQueue().catch(() => 0);
       await get().refreshAll();
+      automationService.syncNativeConfig(get().settings);
       set({ isReady: true });
       import('../services/cloudBackupService').then((m) => m.maybeRunAutoBackup().catch(() => {}));
     })();
@@ -156,6 +169,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       repayments,
       forgottenEntries,
       dailyTracking,
+      pendingDetections,
       settings,
     ] = await Promise.all([
       accountRepo.getAllAccounts(),
@@ -170,6 +184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       loanRepaymentRepo.getAllRepayments(),
       forgottenRepo.getAllForgottenEntries(),
       dailyTrackingRepo.getAllTracking(),
+      automationRepo.getPendingDetections(),
       settingsRepo.getAllSettings(),
     ]);
     set({
@@ -185,6 +200,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       repayments,
       forgottenEntries,
       dailyTracking,
+      pendingDetections,
       settings,
     });
   },
@@ -251,6 +267,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   editTransaction: async (id, input) => {
     await transactionRepo.updateTransaction(id, input);
+    await automationService.learnFromTransactionEdit(id, input.categoryId ?? null);
     await autoMarkToday();
     await get().refreshAll();
   },
@@ -481,10 +498,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refreshAll();
   },
 
+  processAutomationQueue: async () => {
+    const changed = await automationService.drainAutomationQueue();
+    if (changed > 0) await get().refreshAll();
+  },
+  confirmDetection: async (id, input) => {
+    await automationService.confirmDetection(id, input);
+    await get().refreshAll();
+  },
+  ignoreDetection: async (id) => {
+    await automationService.ignoreDetection(id);
+    await get().refreshAll();
+  },
+  undoDetection: async (id) => {
+    const undone = await automationService.undoDetection(id);
+    await get().refreshAll();
+    return undone;
+  },
+
   updateSettings: async (partial) => {
     for (const [key, value] of Object.entries(partial)) {
       await settingsRepo.setSetting(key as keyof AppSettings, value as never);
     }
     set({ settings: { ...get().settings, ...partial } });
+    if (Object.keys(partial).some((key) => key.startsWith('automation'))) {
+      automationService.syncNativeConfig(get().settings);
+    }
   },
 }));

@@ -63,6 +63,7 @@ export default function DashboardScreen() {
   const forgottenEntries = useAppStore((s) => s.forgottenEntries);
   const dailyTracking = useAppStore((s) => s.dailyTracking);
   const removeTransaction = useAppStore((s) => s.removeTransaction);
+  const pendingReviewCount = useAppStore((s) => s.pendingDetections.length);
 
   const [activeShortcut, setActiveShortcut] = useState<Shortcut | null>(null);
 
@@ -143,6 +144,21 @@ export default function DashboardScreen() {
       />
 
       <BalanceSummary balance={balance} income={income} expenses={expenses} />
+
+      {pendingReviewCount > 0 && (
+        <TouchableOpacity onPress={() => router.push('/automation/review')} style={{ marginBottom: spacing.lg }}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <IconCircle name="file-tray-full-outline" color={colors.warning} size={36} iconSize={17} />
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
+                {pendingReviewCount} detected transaction{pendingReviewCount === 1 ? '' : 's'} need review
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 1 }}>From your SMS and payment apps</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={colors.textLight} />
+          </Card>
+        </TouchableOpacity>
+      )}
 
       {/* Quick add shortcuts */}
       <ScrollView

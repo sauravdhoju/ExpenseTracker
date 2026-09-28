@@ -238,3 +238,104 @@ export async function cancelAllNotifications(): Promise<void> {
 export function isNotificationsSupported(): boolean {
   return !isExpoGo;
 }
+
+// ---- Transaction automation -------------------------------------------------------------------
+
+const DETECTED_CATEGORY_ID = 'etracko-detected';
+const AUTOMATION_CHANNEL_ID = 'detected-transactions';
+
+export const AUTOMATION_ACTIONS = {
+  view: 'view',
+  changeCategory: 'change-category',
+  undo: 'undo',
+} as const;
+
+export interface AutomationNotificationData {
+  kind: 'detected' | 'review';
+  detectionId: string;
+  transactionId?: string | null;
+}
+
+let automationSetupDone = false;
+
+async function ensureAutomationNotificationSetup() {
+  const Notifications = await getNotifications();
+  if (!automationSetupDone) {
+    await Notifications.setNotificationChannelAsync(AUTOMATION_CHANNEL_ID, {
+      name: 'Detected transactions',
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
+    await Notifications.setNotificationCategoryAsync(DETECTED_CATEGORY_ID, [
+      { identifier: AUTOMATION_ACTIONS.view, buttonTitle: 'View' },
+      { identifier: AUTOMATION_ACTIONS.changeCategory, buttonTitle: 'Change Category' },
+      { identifier: AUTOMATION_ACTIONS.undo, buttonTitle: 'Undo', options: { isDestructive: true } },
+    ]);
+    automationSetupDone = true;
+  }
+  return Notifications;
+}
+
+/**
+ * Posts the "Expense detected" / "Needs review" notification. Runs from the headless background task,
+ * so it never prompts for permission — it only posts if permission was granted earlier in the UI.
+ */
+export async function notifyDetectedTransaction(
+  title: string,
+  body: string,
+  data: AutomationNotificationData
+): Promise<void> {
+  if (isExpoGo) return;
+  const Notifications = await ensureAutomationNotificationSetup();
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return;
+  await Notifications.scheduleNotificationAsync({
+    identifier: `detected-${data.detectionId}`,
+    content: {
+      title,
+      body,
+      data: data as unknown as Record<string, unknown>,
+      categoryIdentifier: data.kind === 'detected' ? DETECTED_CATEGORY_ID : undefined,
+    },
+    trigger: { channelId: AUTOMATION_CHANNEL_ID },
+  });
+}
+
+export async function dismissDetectedNotification(detectionId: string): Promise<void> {
+  if (isExpoGo) return;
+  const Notifications = await getNotifications();
+  await Notifications.dismissNotificationAsync(`detected-${detectionId}`).catch(() => {});
+}
+
+/**
+ * Subscribes to taps/actions on automation notifications, including the one that cold-started the app.
+ * Returns an unsubscribe function.
+ */
+export function addAutomationResponseListener(
+  handler: (actionId: string, data: AutomationNotificationData) => void
+): () => void {
+  if (isExpoGo) return () => {};
+  let subscription: { remove: () => void } | null = null;
+  let cancelled = false;
+
+  getNotifications().then((Notifications) => {
+    if (cancelled) return;
+    const handle = (response: import('expo-notifications').NotificationResponse | null) => {
+      const data = response?.notification.request.content.data as Partial<AutomationNotificationData> | undefined;
+      if (!response || !data?.detectionId || (data.kind !== 'detected' && data.kind !== 'review')) return;
+      Notifications.clearLastNotificationResponse();
+      const actionId =
+        response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
+          ? AUTOMATION_ACTIONS.view
+          : response.actionIdentifier;
+      Notifications.dismissNotificationAsync(response.notification.request.identifier).catch(() => {});
+      handler(actionId, data as AutomationNotificationData);
+    };
+    handle(Notifications.getLastNotificationResponse());
+    subscription = Notifications.addNotificationResponseReceivedListener(handle);
+  });
+
+  return () => {
+    cancelled = true;
+    subscription?.remove();
+  };
+}

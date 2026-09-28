@@ -1,0 +1,33 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Transaction SMS detection. Only granted if the user enables "Bank SMS" in Automation settings. -->
+  <uses-permission android:name="android.permission.RECEIVE_SMS" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <application>
+    <!-- Woken by Android only when an SMS arrives; does a cheap pre-filter and exits. -->
+    <receiver
+      android:name="expo.modules.etrackoautomation.SmsReceiver"
+      android:exported="true"
+      android:permission="android.permission.BROADCAST_SMS">
+      <intent-filter>
+        <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+      </intent-filter>
+    </receiver>
+
+    <!-- Bound by Android only after the user grants Notification Access to ETracko. -->
+    <service
+      android:name="expo.modules.etrackoautomation.TransactionNotificationListener"
+      android:exported="true"
+      android:label="ETracko transaction detection"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
+
+    <!-- Short-lived headless JS task: parse, save, notify, stop. -->
+    <service
+      android:name="expo.modules.etrackoautomation.AutomationTaskService"
+      android:exported="false" />
+  </application>
+</manifest>

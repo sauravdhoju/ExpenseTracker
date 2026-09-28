@@ -193,11 +193,60 @@ async function runMigrations(): Promise<void> {
 
   await addColumnIfMissing(db, 'goals', 'updated_at', "updated_at TEXT NOT NULL DEFAULT ''");
   await db.execAsync("UPDATE goals SET updated_at = created_at WHERE updated_at = '';");
+
+  // Local transaction automation (SMS / notification detection). Nothing here ever leaves the device.
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS automation_account_mappings (
+      id TEXT PRIMARY KEY,
+      identifier TEXT NOT NULL UNIQUE,
+      account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS automation_merchant_rules (
+      merchant_key TEXT PRIMARY KEY,
+      merchant TEXT NOT NULL,
+      category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS detected_transactions (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL UNIQUE,
+      source TEXT NOT NULL,
+      sender TEXT NOT NULL,
+      raw_text TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT,
+      account_hint TEXT,
+      account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+      channel TEXT,
+      merchant TEXT,
+      reference TEXT,
+      date TEXT NOT NULL,
+      time TEXT NOT NULL,
+      received_at INTEGER NOT NULL,
+      confidence TEXT NOT NULL,
+      category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+      status TEXT NOT NULL,
+      transaction_id TEXT REFERENCES transactions(id) ON DELETE SET NULL,
+      duplicate_of TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_detected_received ON detected_transactions(received_at);
+    CREATE INDEX IF NOT EXISTS idx_detected_status ON detected_transactions(status);
+    CREATE INDEX IF NOT EXISTS idx_detected_transaction ON detected_transactions(transaction_id);
+  `);
 }
 
 export async function resetDatabase(): Promise<void> {
   const db = await getDb();
   await db.execAsync(`
+    DROP TABLE IF EXISTS detected_transactions;
+    DROP TABLE IF EXISTS automation_merchant_rules;
+    DROP TABLE IF EXISTS automation_account_mappings;
     DROP TABLE IF EXISTS daily_tracking;
     DROP TABLE IF EXISTS forgotten_entries;
     DROP TABLE IF EXISTS loan_repayments;

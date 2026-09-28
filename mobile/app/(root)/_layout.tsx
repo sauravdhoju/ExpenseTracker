@@ -1,8 +1,11 @@
 import { View } from 'react-native';
 import { Stack } from 'expo-router/stack';
 import ToastHost from '../../src/components/ui/Toast';
+import { useAutomationRuntime } from '../../src/hooks/useAutomationRuntime';
 
 export default function RootGroupLayout() {
+  useAutomationRuntime();
+
   return (
     <View style={{ flex: 1 }}>
       <Stack
@@ -36,6 +39,10 @@ export default function RootGroupLayout() {
         <Stack.Screen name="settings/security" />
         <Stack.Screen name="settings/appearance" />
         <Stack.Screen name="settings/data" />
+        <Stack.Screen name="settings/automation" />
+        <Stack.Screen name="settings/privacy" />
+        <Stack.Screen name="automation/review" />
+        <Stack.Screen name="about" />
       </Stack>
       <ToastHost />
     </View>

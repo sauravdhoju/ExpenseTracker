@@ -12,6 +12,7 @@ import { getAllRepayments } from '../database/loanRepaymentRepo';
 import { getAllForgottenEntries } from '../database/forgottenRepo';
 import { getAllTracking } from '../database/dailyTrackingRepo';
 import { getDb, resetDatabase } from '../database/db';
+import { getAllAccountMappings, getAllMerchantRules } from '../database/automationRepo';
 import type { Transaction } from '../types';
 
 export interface BackupData {
@@ -27,6 +28,9 @@ export interface BackupData {
   loanRepayments: Awaited<ReturnType<typeof getAllRepayments>>;
   forgottenEntries: Awaited<ReturnType<typeof getAllForgottenEntries>>;
   dailyTracking: Awaited<ReturnType<typeof getAllTracking>>;
+  // Automation rules only; the raw SMS/notification text of detections is intentionally not exported.
+  accountMappings?: Awaited<ReturnType<typeof getAllAccountMappings>>;
+  merchantRules?: Awaited<ReturnType<typeof getAllMerchantRules>>;
 }
 
 export async function buildBackup(): Promise<BackupData> {
@@ -41,6 +45,8 @@ export async function buildBackup(): Promise<BackupData> {
     loanRepayments,
     forgottenEntries,
     dailyTracking,
+    accountMappings,
+    merchantRules,
   ] = await Promise.all([
     getAllAccounts(),
     getAllCategories(),
@@ -52,6 +58,8 @@ export async function buildBackup(): Promise<BackupData> {
     getAllRepayments(),
     getAllForgottenEntries(),
     getAllTracking(),
+    getAllAccountMappings(),
+    getAllMerchantRules(),
   ]);
   return {
     version: 1,
@@ -66,6 +74,8 @@ export async function buildBackup(): Promise<BackupData> {
     loanRepayments,
     forgottenEntries,
     dailyTracking,
+    accountMappings,
+    merchantRules,
   };
 }
 
@@ -188,6 +198,20 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
       `INSERT INTO categories (id, name, kind, icon, color, is_default, is_enabled, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       c.id, c.name, c.kind, c.icon, c.color, c.isDefault ? 1 : 0, c.isEnabled ? 1 : 0, c.createdAt
+    );
+  }
+
+  for (const m of backup.accountMappings ?? []) {
+    await db.runAsync(
+      'INSERT INTO automation_account_mappings (id, identifier, account_id, created_at) VALUES (?, ?, ?, ?)',
+      m.id, m.identifier, m.accountId, m.createdAt
+    );
+  }
+
+  for (const r of backup.merchantRules ?? []) {
+    await db.runAsync(
+      'INSERT INTO automation_merchant_rules (merchant_key, merchant, category_id, updated_at) VALUES (?, ?, ?, ?)',
+      r.merchantKey, r.merchant, r.categoryId, r.updatedAt
     );
   }
 

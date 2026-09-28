@@ -5,6 +5,8 @@ import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { spacing, radius } from '../../src/constants/theme';
 import Card from '../../src/components/ui/Card';
 import PageHeader from '../../src/components/ui/PageHeader';
+import { useAppStore } from '../../src/store/useAppStore';
+import { APP_INFO } from '../../src/constants/appInfo';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
@@ -127,6 +129,8 @@ function Section({
 export default function MoreScreen() {
   const colors = useThemeColors();
   const router = useRouter();
+  const automationEnabled = useAppStore((s) => s.settings.automationEnabled);
+  const pendingCount = useAppStore((s) => s.pendingDetections.length);
 
   return (
     <ScrollView
@@ -187,6 +191,30 @@ export default function MoreScreen() {
       />
 
       <Section
+        title="Automation"
+        tint={colors.income}
+        rows={[
+          {
+            icon: 'flash-outline',
+            label: 'Automation',
+            description: automationEnabled
+              ? 'Detecting transactions from SMS & apps'
+              : 'Off — add expenses automatically',
+            onPress: () => router.push('/settings/automation'),
+          },
+          {
+            icon: 'file-tray-outline',
+            label: 'Review Inbox',
+            description:
+              pendingCount > 0
+                ? `${pendingCount} waiting for review`
+                : 'Nothing to review',
+            onPress: () => router.push('/automation/review'),
+          },
+        ]}
+      />
+
+      <Section
         title="Preferences"
         tint={colors.income}
         rows={[
@@ -213,6 +241,12 @@ export default function MoreScreen() {
         tint={colors.warning}
         rows={[
           {
+            icon: 'shield-checkmark-outline',
+            label: 'Privacy',
+            description: 'Your data stays on this device',
+            onPress: () => router.push('/settings/privacy'),
+          },
+          {
             icon: 'download-outline',
             label: 'Export / Import Data',
             onPress: () => router.push('/settings/data'),
@@ -236,8 +270,9 @@ export default function MoreScreen() {
         rows={[
           {
             icon: 'information-circle-outline',
-            label: 'Expense Tracker',
-            description: 'Version 1.0.0',
+            label: `About ${APP_INFO.name}`,
+            description: `Version ${APP_INFO.version} · Developer, help & FAQ`,
+            onPress: () => router.push('/about'),
           },
         ]}
       />

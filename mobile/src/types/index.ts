@@ -191,6 +191,13 @@ export interface AppSettings {
   biometricLockEnabled: boolean;
   dateSystem: DateSystem;
   graceDayEnabled: boolean;
+  automationEnabled: boolean; // master switch for SMS / notification transaction detection
+  automationSmsEnabled: boolean;
+  automationNotificationsEnabled: boolean;
+  automationAllowedApps: string[]; // package names whose notifications may be processed
+  automationAutoCategorize: boolean;
+  automationAutoCreate: boolean; // create high-confidence transactions without review
+  automationReviewUncertain: boolean; // send medium-confidence detections to the Review Inbox
 }
 
 export interface CategorySpending {

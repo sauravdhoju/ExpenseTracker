@@ -21,6 +21,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   biometricLockEnabled: false,
   dateSystem: 'AD',
   graceDayEnabled: true,
+  automationEnabled: false,
+  automationSmsEnabled: true,
+  automationNotificationsEnabled: false,
+  automationAllowedApps: [],
+  automationAutoCategorize: true,
+  automationAutoCreate: true,
+  automationReviewUncertain: true,
 };
 
 export async function getSetting<K extends keyof AppSettings>(

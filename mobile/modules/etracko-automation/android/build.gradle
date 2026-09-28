@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.etrackoautomation'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.etrackoautomation"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // HeadlessJsTaskService, used to run the JS parser without opening the UI.
+  implementation 'com.facebook.react:react-android'
+}

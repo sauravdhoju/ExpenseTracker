@@ -1,0 +1,6 @@
+{
+  "name": "etracko-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "On-device SMS / notification listeners for ETracko transaction automation (Android only)"
+}
