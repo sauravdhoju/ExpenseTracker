@@ -15,11 +15,12 @@ import { useDateFormat } from '../../hooks/useDateFormat';
 import { useAppStore } from '../../store/useAppStore';
 import {
   filterByDay,
+  filterByRange,
   filterByWeek,
   getBudgetEngineSummary,
   getTotalExpenses,
 } from '../../services/calculations';
-import { addDays, toISODate } from '../../utils/date';
+import { addDays, daysBetween, toISODate } from '../../utils/date';
 import { activityHref, ranges } from '../../utils/links';
 import { brand, radius, spacing } from '../../constants/theme';
 import { MASK, formatCompact, splitAmount } from './money';
@@ -128,6 +129,7 @@ export default function TodaySpendCard({ now }: { now: Date }) {
   const router = useRouter();
   const transactions = useAppStore((s) => s.transactions);
   const budgets = useAppStore((s) => s.budgets);
+  const bills = useAppStore((s) => s.bills);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -168,6 +170,85 @@ export default function TodaySpendCard({ now }: { now: Date }) {
   const money = (n: number) =>
     hideBalances ? '••••' : formatCompact(n, currency);
   const amount = splitAmount(spentToday, currency);
+
+  // --- "Heads-up" line: the single most useful thing to know right now ---
+  const todayIso = toISODate(now);
+  const receivedToday = today
+    .filter((t) => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  // Overdue, due today, or due tomorrow — most urgent first.
+  const urgentBill = bills
+    .filter((b) => !b.isPaid && daysBetween(todayIso, b.dueDate) <= 1)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+
+  // Straight-line month-end projection; skipped in the first days when it's mostly noise.
+  const monthRange = ranges.month(now, dateSystem);
+  const dayOfMonth = daysBetween(monthRange.start, todayIso) + 1;
+  const daysInMonth = daysBetween(monthRange.start, monthRange.end) + 1;
+  const spentThisMonth = useMemo(
+    () => getTotalExpenses(filterByRange(transactions, monthRange)),
+    // monthRange is derived from now + dateSystem
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transactions, monthRange.start, monthRange.end]
+  );
+  const projected =
+    dayOfMonth >= 3 && spentThisMonth > 0
+      ? (spentThisMonth / dayOfMonth) * daysInMonth
+      : null;
+  const projectedDiff =
+    projected !== null && overall ? projected - overall.amount : null;
+
+  let headsUp: {
+    icon: keyof typeof Ionicons.glyphMap;
+    text: string;
+    tone: 'alert' | 'good' | 'info';
+    onPress: () => void;
+  } | null = null;
+
+  if (urgentBill) {
+    const days = daysBetween(todayIso, urgentBill.dueDate);
+    const when =
+      days < 0
+        ? `overdue by ${-days} day${days === -1 ? '' : 's'}`
+        : days === 0
+          ? 'due today'
+          : 'due tomorrow';
+    headsUp = {
+      icon: 'receipt-outline',
+      text: `${urgentBill.title} · ${money(urgentBill.amount)} ${when}`,
+      tone: 'alert',
+      onPress: () => router.push('/bills'),
+    };
+  } else if (projectedDiff !== null && projectedDiff > 0) {
+    headsUp = {
+      icon: 'trending-up',
+      text: `On pace for ${money(projected!)} · ${money(projectedDiff)} over budget`,
+      tone: 'alert',
+      onPress: () => router.push('/(root)/(tabs)/budgets'),
+    };
+  } else if (receivedToday > 0) {
+    headsUp = {
+      icon: 'arrow-down-circle-outline',
+      text: `Received ${money(receivedToday)} today`,
+      tone: 'good',
+      onPress: () =>
+        router.push(activityHref({ range: ranges.today(now), type: 'income' })),
+    };
+  } else if (projected !== null) {
+    headsUp = {
+      icon: 'analytics-outline',
+      text:
+        projectedDiff !== null
+          ? `On pace for ${money(projected)} · ${money(-projectedDiff)} under budget`
+          : `On pace for ${money(projected)} by month end`,
+      tone: projectedDiff !== null ? 'good' : 'info',
+      onPress: () =>
+        router.push(
+          activityHref({ range: monthRange, type: 'expense' })
+        ),
+    };
+  }
 
   let comparison: { text: string; good: boolean } | null = null;
   if (spentToday === 0) {
@@ -429,6 +510,48 @@ export default function TodaySpendCard({ now }: { now: Date }) {
               }
             />
           </View>
+
+          {headsUp && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={headsUp.onPress}
+              accessibilityRole="button"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 10,
+                paddingTop: 10,
+                borderTopWidth: 1,
+                borderTopColor: 'rgba(255,255,255,0.16)',
+              }}
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor:
+                    headsUp.tone === 'alert'
+                      ? 'rgba(225,25,55,0.85)'
+                      : headsUp.tone === 'good'
+                        ? 'rgba(22,163,74,0.85)'
+                        : 'rgba(255,255,255,0.2)',
+                }}
+              >
+                <Ionicons name={headsUp.icon} size={12} color={WHITE} />
+              </View>
+              <Text
+                style={{ flex: 1, color: WHITE, fontSize: 12.5, fontWeight: '600' }}
+                numberOfLines={1}
+              >
+                {headsUp.text}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={WHITE_MUTED} />
+            </TouchableOpacity>
+          )}
         </TouchableOpacity>
       </View>
     </View>
