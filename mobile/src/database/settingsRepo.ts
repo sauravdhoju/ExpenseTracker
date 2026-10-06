@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   automationAutoCategorize: true,
   automationAutoCreate: true,
   automationReviewUncertain: true,
+  automationAskIncomeSource: true,
   homeSections: ['todayActivity'],
 };
 

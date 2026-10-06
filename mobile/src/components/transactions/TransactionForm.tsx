@@ -34,6 +34,7 @@ export interface TransactionFormValues {
   notes: string | null;
   date: string;
   repeat: RecurringFrequency | null;
+  fee: number; // transfers only: service charge paid by the sending account
 }
 
 interface Props {
@@ -47,6 +48,7 @@ interface Props {
     title?: string;
     notes?: string | null;
     date?: string;
+    fee?: number;
   };
   onSubmit: (values: TransactionFormValues) => Promise<void>;
   onDelete?: () => void;
@@ -150,12 +152,14 @@ export default function TransactionForm({ mode, initial, onSubmit, onDelete }: P
   const [notes, setNotes] = useState(initial.notes ?? '');
   const [date, setDate] = useState(initial.date ?? todayISO());
   const [repeat, setRepeat] = useState<RecurringFrequency | null>(null);
+  const [fee, setFee] = useState(initial.fee ? String(initial.fee) : '');
   const [titleFocused, setTitleFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const isTransfer = type === 'transfer';
   const hasCategory = type === 'expense' || type === 'income';
   const parsedAmount = parseFloat(amount);
+  const parsedFee = isTransfer ? parseFloat(fee) || 0 : 0;
   const accent = type === 'income' || type === 'repayment' ? colors.income : type === 'transfer' ? colors.primary : colors.expense;
 
   const today = todayISO();
@@ -220,6 +224,7 @@ export default function TransactionForm({ mode, initial, onSubmit, onDelete }: P
         notes: notes.trim() || null,
         date,
         repeat,
+        fee: parsedFee,
       });
     } finally {
       setIsSaving(false);
@@ -404,6 +409,42 @@ export default function TransactionForm({ mode, initial, onSubmit, onDelete }: P
                   <AccountPills value={toAccountId} onChange={setToAccountId} exclude={accountId} />
                 </View>
               </View>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 4,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <FieldLabel>Charge</FieldLabel>
+                <Text style={{ fontSize: 14.5, color: colors.textLight, marginRight: 4 }}>{CURRENCIES[currency].symbol}</Text>
+                <TextInput
+                  value={fee}
+                  onChangeText={(t) => setFee(sanitizeAmount(t))}
+                  placeholder="0 · service charge, if any"
+                  placeholderTextColor={colors.textLight}
+                  keyboardType="decimal-pad"
+                  style={{ flex: 1, fontSize: 14.5, color: colors.text, paddingVertical: 10 }}
+                />
+              </View>
+              {parsedAmount > 0 && parsedFee > 0 && (
+                <View style={{ paddingBottom: 12, gap: 3 }}>
+                  <Text style={{ fontSize: 12, color: colors.textLight }}>
+                    {accounts.find((a) => a.id === accountId)?.name ?? 'From'} pays{' '}
+                    <Text style={{ fontWeight: '700', color: colors.expense }}>
+                      {formatCurrency(parsedAmount + parsedFee, currency)}
+                    </Text>
+                    {' '}({formatCurrency(parsedAmount, currency)} + {formatCurrency(parsedFee, currency)} charge)
+                  </Text>
+                  <Text style={{ fontSize: 12, color: colors.textLight }}>
+                    {accounts.find((a) => a.id === toAccountId)?.name ?? 'To'} receives{' '}
+                    <Text style={{ fontWeight: '700', color: colors.income }}>{formatCurrency(parsedAmount, currency)}</Text>
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: colors.textLight }}>The charge is saved as a “Fees &amp; Charges” expense.</Text>
+                </View>
+              )}
             </>
           )}
         </Sheet>

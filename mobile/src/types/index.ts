@@ -53,6 +53,7 @@ export interface Transaction {
   loanId: string | null; // set if generated from a lent/repayment action
   forgottenId: string | null; // set if generated from a forgotten-money entry/resolution
   affectsBalance: boolean; // false for a forgotten-money resolution (the balance effect already happened)
+  parentId: string | null; // set on a transfer's service-charge expense; points at that transfer
   createdAt: string;
   updatedAt: string;
 }
@@ -211,6 +212,7 @@ export interface AppSettings {
   automationAutoCategorize: boolean;
   automationAutoCreate: boolean; // create high-confidence transactions without review
   automationReviewUncertain: boolean; // send medium-confidence detections to the Review Inbox
+  automationAskIncomeSource: boolean; // send detected credits to the Review Inbox to ask where the money came from
   homeSections: DashboardWidgetId[]; // optional home-screen sections shown below "Where it went", in order
 }
 

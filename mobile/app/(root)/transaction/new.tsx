@@ -36,6 +36,7 @@ export default function NewTransactionScreen() {
         title: v.title,
         notes: v.notes,
         date: v.date,
+        fee: v.type === 'transfer' ? v.fee : undefined,
       });
     }
     router.back();

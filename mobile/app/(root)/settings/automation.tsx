@@ -509,6 +509,17 @@ export default function AutomationScreen() {
                 automationReviewUncertain: !settings.automationReviewUncertain,
               })
             }
+          />
+          <ToggleRow
+            icon="help-circle-outline"
+            title="Ask where incoming money is from"
+            description="Credits wait in the Review Inbox so you can mark them as earned, a gift, family support, money someone sent, or a transfer from your own account"
+            enabled={settings.automationAskIncomeSource}
+            onToggle={() =>
+              set({
+                automationAskIncomeSource: !settings.automationAskIncomeSource,
+              })
+            }
             last
           />
         </Card>

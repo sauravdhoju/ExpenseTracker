@@ -236,11 +236,11 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
 
   for (const t of backup.transactions) {
     await db.runAsync(
-      `INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, forgotten_id, affects_balance, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, forgotten_id, affects_balance, parent_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       t.id, t.type, t.amount, t.accountId, t.toAccountId, t.categoryId, t.title, t.notes,
       t.date, t.time ?? '00:00', t.recurringId, t.loanId ?? null, t.forgottenId ?? null,
-      t.affectsBalance === false ? 0 : 1, t.createdAt, t.updatedAt
+      t.affectsBalance === false ? 0 : 1, t.parentId ?? null, t.createdAt, t.updatedAt
     );
   }
 

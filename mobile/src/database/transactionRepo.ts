@@ -1,6 +1,7 @@
 import { getDb } from './db';
 import { generateId } from '../utils/id';
 import { adjustAccountBalance } from './accountRepo';
+import { FEES_CATEGORY_NAME } from '../constants/categories';
 import type { Transaction, TransactionType } from '../types';
 
 interface TransactionRow {
@@ -18,6 +19,7 @@ interface TransactionRow {
   loan_id: string | null;
   forgotten_id: string | null;
   affects_balance: number;
+  parent_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +40,7 @@ function mapRow(row: TransactionRow): Transaction {
     loanId: row.loan_id,
     forgottenId: row.forgotten_id,
     affectsBalance: !!row.affects_balance,
+    parentId: row.parent_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -77,6 +80,11 @@ export interface CreateTransactionInput {
   /** false skips the balance effect entirely — used for a forgotten-money resolution, where the
    *  balance was already debited by the original `forgotten` transaction. Defaults to true. */
   affectsBalance?: boolean;
+  /** Transfers only: the service charge the sending account paid on top of `amount`. It is saved as a
+   *  separate expense (category "Fees & Charges") linked back to the transfer. On update, leaving it
+   *  undefined keeps the current charge. */
+  fee?: number;
+  parentId?: string | null;
 }
 
 function currentTime(): string {
@@ -130,8 +138,8 @@ export async function createTransaction(
 
   await db.runAsync(
     `INSERT INTO transactions
-       (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, forgotten_id, affects_balance, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, type, amount, account_id, to_account_id, category_id, title, notes, date, time, recurring_id, loan_id, forgotten_id, affects_balance, parent_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.type,
     input.amount,
@@ -146,6 +154,7 @@ export async function createTransaction(
     input.loanId ?? null,
     input.forgottenId ?? null,
     affectsBalance ? 1 : 0,
+    input.parentId ?? null,
     now,
     now
   );
@@ -157,6 +166,10 @@ export async function createTransaction(
     toAccountId: input.toAccountId ?? null,
     affectsBalance,
   });
+
+  if (input.type === 'transfer' && input.fee && input.fee > 0) {
+    await syncTransferFee(id, { accountId: input.accountId, date: input.date, time, fee: input.fee });
+  }
 
   return {
     id,
@@ -173,6 +186,7 @@ export async function createTransaction(
     loanId: input.loanId ?? null,
     forgottenId: input.forgottenId ?? null,
     affectsBalance,
+    parentId: input.parentId ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -216,12 +230,73 @@ export async function updateTransaction(
     toAccountId: input.toAccountId ?? null,
     affectsBalance,
   });
+
+  if (input.type !== 'transfer') {
+    await syncTransferFee(id, null);
+  } else if (input.fee !== undefined) {
+    await syncTransferFee(id, { accountId: input.accountId, date: input.date, time: existing.time, fee: input.fee });
+  } else {
+    // Charge unchanged, but keep it on the same account and date as the transfer.
+    const fee = await getFeeTransaction(id);
+    if (fee) await syncTransferFee(id, { accountId: input.accountId, date: input.date, time: existing.time, fee: fee.amount });
+  }
+}
+
+async function getFeeTransaction(parentId: string): Promise<Transaction | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE parent_id = ?', parentId);
+  return row ? mapRow(row) : null;
+}
+
+async function getFeesCategoryId(): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ id: string }>(
+    "SELECT id FROM categories WHERE name = ? AND kind = 'expense'",
+    FEES_CATEGORY_NAME
+  );
+  return row?.id ?? null;
+}
+
+/** Creates, updates or removes the service-charge expense that belongs to a transfer. */
+async function syncTransferFee(
+  parentId: string,
+  fee: { accountId: string; date: string; time: string; fee: number } | null
+): Promise<void> {
+  const existing = await getFeeTransaction(parentId);
+  if (!fee || !(fee.fee > 0)) {
+    if (existing) await deleteTransaction(existing.id);
+    return;
+  }
+  if (existing) {
+    await updateTransaction(existing.id, {
+      type: 'expense',
+      amount: fee.fee,
+      accountId: fee.accountId,
+      categoryId: existing.categoryId,
+      title: existing.title,
+      notes: existing.notes,
+      date: fee.date,
+    });
+    return;
+  }
+  await createTransaction({
+    type: 'expense',
+    amount: fee.fee,
+    accountId: fee.accountId,
+    categoryId: await getFeesCategoryId(),
+    title: 'Transfer service charge',
+    date: fee.date,
+    time: fee.time,
+    parentId,
+  });
 }
 
 export async function deleteTransaction(id: string): Promise<void> {
   const existing = await getTransactionById(id);
   if (!existing) return;
   const db = await getDb();
+  const fee = await getFeeTransaction(id);
+  if (fee) await deleteTransaction(fee.id);
   await reverseBalanceEffect(existing);
   await db.runAsync('DELETE FROM transactions WHERE id = ?', id);
 }

@@ -7,6 +7,10 @@ import { useCurrency } from '../../../src/hooks/useCurrency';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { titleFor } from '../../../src/automation/automationService';
 import { formatFriendlyDate } from '../../../src/utils/date';
+import {
+  FAMILY_SUPPORT_CATEGORY_NAME,
+  MONEY_RECEIVED_CATEGORY_NAME,
+} from '../../../src/constants/categories';
 import { spacing, radius } from '../../../src/constants/theme';
 import Card from '../../../src/components/ui/Card';
 import Button from '../../../src/components/ui/Button';
@@ -28,13 +32,48 @@ const KIND_LABEL: Record<DetectedTransaction['kind'], string> = {
   atm_withdrawal: 'ATM withdrawal',
 };
 
-function Chip({ label, selected, onPress, color }: { label: string; selected: boolean; onPress: () => void; color?: string }) {
+// Where a detected credit came from. Only "earned" is income in the everyday sense; the rest are
+// shortcuts to the matching income category, or a transfer from one of the user's own accounts.
+type CreditSource = 'earned' | 'gift' | 'someone' | 'family' | 'own';
+
+const CREDIT_SOURCES: { value: CreditSource; label: string; icon: keyof typeof Ionicons.glyphMap; category?: string }[] = [
+  { value: 'earned', label: 'Earned (salary, work…)', icon: 'briefcase-outline' },
+  { value: 'someone', label: 'Someone sent it', icon: 'people-outline', category: MONEY_RECEIVED_CATEGORY_NAME },
+  { value: 'gift', label: 'Gift', icon: 'gift-outline', category: 'Gift' },
+  { value: 'family', label: 'Family / senior support', icon: 'home-outline', category: FAMILY_SUPPORT_CATEGORY_NAME },
+  { value: 'own', label: 'From my other account', icon: 'swap-horizontal-outline' },
+];
+
+/** Keeps only digits and one decimal point, with at most two decimals. */
+function sanitizeAmount(text: string): string {
+  const cleaned = text.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+  const [whole, ...rest] = cleaned.split('.');
+  if (rest.length === 0) return whole;
+  return `${whole}.${rest.join('').slice(0, 2)}`;
+}
+
+function Chip({
+  label,
+  selected,
+  onPress,
+  color,
+  icon,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  color?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+}) {
   const colors = useThemeColors();
   const active = color ?? colors.primary;
   return (
     <TouchableOpacity
       onPress={onPress}
       style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
         paddingVertical: 7,
         paddingHorizontal: 12,
         borderRadius: radius.full,
@@ -43,6 +82,7 @@ function Chip({ label, selected, onPress, color }: { label: string; selected: bo
         marginBottom: spacing.sm,
       }}
     >
+      {icon && <Ionicons name={icon} size={14} color={selected ? colors.white : colors.textLight} />}
       <Text style={{ color: selected ? colors.white : colors.text, fontWeight: '600', fontSize: 12.5 }}>{label}</Text>
     </TouchableOpacity>
   );
@@ -65,31 +105,76 @@ function ReviewCard({ item }: { item: DetectedTransaction }) {
     item.kind === 'atm_withdrawal' ? (cashAccount?.id ?? null) : null
   );
   const [categoryId, setCategoryId] = useState<string | null>(item.categoryId);
+  const isCredit = item.kind === 'income';
+  const [source, setSource] = useState<CreditSource>(() => {
+    const name = categories.find((c) => c.id === item.categoryId)?.name;
+    return CREDIT_SOURCES.find((s) => s.category && s.category === name)?.value ?? 'earned';
+  });
+  const [ownFromId, setOwnFromId] = useState<string | null>(null); // credit from the user's own account
+  const [fee, setFee] = useState('');
   const [title, setTitle] = useState(titleFor(item));
   const [rememberAccount, setRememberAccount] = useState(!item.accountId);
   const [showRaw, setShowRaw] = useState(false);
   const [busy, setBusy] = useState<'confirm' | 'ignore' | null>(null);
 
+  const isOwnCredit = isCredit && source === 'own';
+  const isTransfer = type === 'transfer' || isOwnCredit;
+  const parsedFee = isTransfer ? parseFloat(fee) || 0 : 0;
   const relevantCategories = categories.filter((c) => c.isEnabled && c.kind === (type === 'income' ? 'income' : 'expense'));
   const canConfirm =
-    !!accountId && (type === 'transfer' ? !!toAccountId && toAccountId !== accountId : true) && title.trim().length > 0;
+    !!accountId &&
+    (isOwnCredit
+      ? !!ownFromId && ownFromId !== accountId
+      : type === 'transfer'
+        ? !!toAccountId && toAccountId !== accountId
+        : true) &&
+    title.trim().length > 0;
+
+  const chooseSource = (next: CreditSource) => {
+    setSource(next);
+    const def = CREDIT_SOURCES.find((s) => s.value === next);
+    if (def?.category) {
+      setCategoryId(categories.find((c) => c.kind === 'income' && c.name === def.category)?.id ?? null);
+    } else if (next === 'earned') {
+      // Let them pick Salary / Freelance / ... unless the auto-suggested one already is one of those.
+      const current = categories.find((c) => c.id === categoryId)?.name;
+      if (CREDIT_SOURCES.some((s) => s.category === current)) setCategoryId(null);
+    }
+    if (next === 'own' && title === titleFor(item)) setTitle('Transfer from my account');
+    if (next !== 'own' && title === 'Transfer from my account') setTitle(titleFor(item));
+  };
   const rememberLabel = item.accountHint
     ? `Always use this account for ••••${item.accountHint}`
     : `Always use this account for ${item.source === 'sms' ? item.sender : (item.channel ?? 'this app')}`;
-  const amountColor = type === 'income' ? colors.income : type === 'transfer' ? colors.text : colors.expense;
+  const amountColor = isTransfer ? colors.text : type === 'income' ? colors.income : colors.expense;
 
   const handleConfirm = async () => {
     if (!accountId) return;
     setBusy('confirm');
     try {
-      await confirmDetection(item.id, {
-        type,
-        accountId,
-        toAccountId: type === 'transfer' ? toAccountId : null,
-        categoryId: type === 'transfer' ? null : categoryId,
-        title,
-        rememberAccount,
-      });
+      await confirmDetection(
+        item.id,
+        isOwnCredit && ownFromId
+          ? {
+              type: 'transfer',
+              accountId: ownFromId,
+              toAccountId: accountId,
+              categoryId: null,
+              title,
+              fee: parsedFee,
+              detectedAccountId: accountId,
+              rememberAccount,
+            }
+          : {
+              type,
+              accountId,
+              toAccountId: type === 'transfer' ? toAccountId : null,
+              categoryId: type === 'transfer' ? null : categoryId,
+              title,
+              fee: type === 'transfer' ? parsedFee : undefined,
+              rememberAccount,
+            }
+      );
       showToast('Transaction added');
     } finally {
       setBusy(null);
@@ -129,11 +214,30 @@ function ReviewCard({ item }: { item: DetectedTransaction }) {
         </View>
       )}
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {TYPES.map((t) => (
-          <Chip key={t.value} label={t.label} selected={type === t.value} onPress={() => setType(t.value)} />
-        ))}
-      </View>
+      {isCredit ? (
+        <>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: spacing.sm }}>
+            Where did this money come from?
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {CREDIT_SOURCES.map((s) => (
+              <Chip
+                key={s.value}
+                label={s.label}
+                icon={s.icon}
+                selected={source === s.value}
+                onPress={() => chooseSource(s.value)}
+              />
+            ))}
+          </View>
+        </>
+      ) : (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {TYPES.map((t) => (
+            <Chip key={t.value} label={t.label} selected={type === t.value} onPress={() => setType(t.value)} />
+          ))}
+        </View>
+      )}
 
       <Text style={{ fontSize: 12, color: colors.textLight, marginTop: spacing.sm, marginBottom: spacing.xs }}>Title</Text>
       <TextInput
@@ -150,7 +254,7 @@ function ReviewCard({ item }: { item: DetectedTransaction }) {
         }}
       />
 
-      {type !== 'transfer' && (
+      {!isTransfer && (!isCredit || source === 'earned') && (
         <>
           <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.xs }}>
             Category{item.merchant ? ` — remembered for ${item.merchant}` : ''}
@@ -164,7 +268,7 @@ function ReviewCard({ item }: { item: DetectedTransaction }) {
       )}
 
       <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.xs }}>
-        {type === 'transfer' ? 'From account' : 'Account'}
+        {isCredit ? 'Received in' : type === 'transfer' ? 'From account' : 'Account'}
       </Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
         {accounts.map((a) => (
@@ -172,7 +276,20 @@ function ReviewCard({ item }: { item: DetectedTransaction }) {
         ))}
       </View>
 
-      {type === 'transfer' && (
+      {isOwnCredit && (
+        <>
+          <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.xs }}>Sent from</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
+            {accounts
+              .filter((a) => a.id !== accountId)
+              .map((a) => (
+                <Chip key={a.id} label={a.name} selected={ownFromId === a.id} onPress={() => setOwnFromId(a.id)} />
+              ))}
+          </View>
+        </>
+      )}
+
+      {type === 'transfer' && !isCredit && (
         <>
           <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.xs }}>To account</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
@@ -182,6 +299,30 @@ function ReviewCard({ item }: { item: DetectedTransaction }) {
                 <Chip key={a.id} label={a.name} selected={toAccountId === a.id} onPress={() => setToAccountId(a.id)} />
               ))}
           </View>
+        </>
+      )}
+
+      {isTransfer && (
+        <>
+          <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: spacing.xs }}>
+            Service charge (paid by the sending account)
+          </Text>
+          <TextInput
+            value={fee}
+            onChangeText={(t) => setFee(sanitizeAmount(t))}
+            placeholder="0"
+            placeholderTextColor={colors.textLight}
+            keyboardType="decimal-pad"
+            style={{
+              backgroundColor: colors.background,
+              borderRadius: radius.md,
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.md,
+              fontSize: 14,
+              color: colors.text,
+              marginBottom: spacing.md,
+            }}
+          />
         </>
       )}
 

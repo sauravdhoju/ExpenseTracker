@@ -85,7 +85,14 @@ function transactionTypeFor(kind: DetectedTransaction['kind']): TransactionType 
 
 async function createLinkedTransaction(
   d: DetectedTransaction,
-  opts: { accountId: string; toAccountId: string | null; categoryId: string | null; type?: TransactionType; title?: string }
+  opts: {
+    accountId: string;
+    toAccountId: string | null;
+    categoryId: string | null;
+    type?: TransactionType;
+    title?: string;
+    fee?: number;
+  }
 ): Promise<string> {
   const type = opts.type ?? transactionTypeFor(d.kind);
   const transaction = await transactionRepo.createTransaction({
@@ -98,6 +105,7 @@ async function createLinkedTransaction(
     notes: notesFor(d),
     date: d.date,
     time: d.time,
+    fee: type === 'transfer' ? opts.fee : undefined,
   });
   await dailyTrackingRepo.markTracked(todayISO());
   return transaction.id;
@@ -165,16 +173,23 @@ export async function processEvent(event: AutomationEvent, settings: AppSettings
   }
 
   const categoryId = settings.automationAutoCategorize ? await resolveCategoryId(parsed, rawText) : null;
+  // Money coming in isn't always earnings: it may be a gift, pocket money, a friend paying back or a
+  // move from another of the user's own accounts. Ask, unless they already answered for this sender.
+  const askSource =
+    kind === 'income' &&
+    settings.automationAskIncomeSource &&
+    !(parsed.merchant && (await automationRepo.getMerchantRuleCategory(merchantKey(parsed.merchant))));
 
   const accounts = await accountRepo.getAllAccounts();
   const cashAccount = kind === 'atm_withdrawal' ? findCashAccount(accounts, accountId) : undefined;
   const canCreate =
+    !askSource &&
     settings.automationAutoCreate &&
     parsed.confidence === 'high' &&
     !!accountId &&
     (kind === 'expense' || kind === 'income' || (kind === 'atm_withdrawal' && !!cashAccount));
 
-  if (!canCreate && !settings.automationReviewUncertain) return 'skipped';
+  if (!canCreate && !askSource && !settings.automationReviewUncertain) return 'skipped';
 
   const detected = await automationRepo.insertDetected({
     ...base,
@@ -221,6 +236,11 @@ async function postNotification(d: DetectedTransaction, accounts: Account[], set
       kind: 'detected',
       detectionId: d.id,
       transactionId: d.transactionId,
+    });
+  } else if (d.kind === 'income') {
+    await notifyDetectedTransaction('Money received — where is it from?', lines.join('\n'), {
+      kind: 'review',
+      detectionId: d.id,
     });
   } else {
     await notifyDetectedTransaction('Transaction needs review', lines.join('\n'), {
@@ -275,6 +295,10 @@ export interface ConfirmDetectionInput {
   toAccountId?: string | null;
   categoryId: string | null;
   title?: string;
+  fee?: number; // transfers only: service charge paid by the sending account
+  /** The account the message was about, when it isn't `accountId` (a credit recorded as a transfer
+   *  from another own account lands in `toAccountId`). Used for "always use this account". */
+  detectedAccountId?: string;
   rememberAccount: boolean;
 }
 
@@ -288,11 +312,13 @@ export async function confirmDetection(id: string, input: ConfirmDetectionInput)
     categoryId: input.categoryId,
     type: input.type,
     title: input.title,
+    fee: input.fee,
   });
+  const detectedAccountId = input.detectedAccountId ?? input.accountId;
   await automationRepo.updateDetected(id, {
     status: 'confirmed',
     transactionId,
-    accountId: input.accountId,
+    accountId: detectedAccountId,
     categoryId: input.categoryId,
   });
 
@@ -300,7 +326,7 @@ export async function confirmDetection(id: string, input: ConfirmDetectionInput)
     const identifier = detected.accountHint
       ? automationRepo.accountIdentifier(detected.accountHint)
       : automationRepo.sourceIdentifier(detected.source, detected.sender);
-    await automationRepo.upsertAccountMapping(identifier, input.accountId);
+    await automationRepo.upsertAccountMapping(identifier, detectedAccountId);
   }
   if (detected.merchant && input.categoryId && input.type !== 'transfer') {
     await automationRepo.upsertMerchantRule(merchantKey(detected.merchant), detected.merchant, input.categoryId);

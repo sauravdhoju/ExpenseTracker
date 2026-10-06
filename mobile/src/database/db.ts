@@ -188,6 +188,9 @@ async function runMigrations(): Promise<void> {
     'forgotten_id TEXT REFERENCES forgotten_entries(id) ON DELETE SET NULL'
   );
   await addColumnIfMissing(db, 'transactions', 'affects_balance', 'affects_balance INTEGER NOT NULL DEFAULT 1');
+  // A transfer's service charge is stored as its own expense row pointing back at the transfer.
+  await addColumnIfMissing(db, 'transactions', 'parent_id', 'parent_id TEXT');
+  await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_parent ON transactions(parent_id);');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_loan ON transactions(loan_id);');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_forgotten ON transactions(forgotten_id);');
 
