@@ -6,6 +6,7 @@ import {
   GOOGLE_OAUTH_CLIENT_ID_ANDROID,
   GOOGLE_OAUTH_CLIENT_ID_IOS,
   GOOGLE_DRIVE_SCOPES,
+  GOOGLE_REDIRECT_SCHEME,
 } from '../constants/googleAuthConfig';
 import * as googleAuthService from '../services/googleAuthService';
 
@@ -32,7 +33,11 @@ export function useGoogleDriveAuth() {
 
     setIsSigningIn(true);
     try {
-      const redirectUri = AuthSession.makeRedirectUri({ scheme: 'mobile', path: 'google-auth' });
+      // Google only accepts the reverse-package scheme for Android clients; exp:// (Expo Go)
+      // and arbitrary schemes like `mobile://` are rejected with Error 400: invalid_request.
+      const redirectUri = AuthSession.makeRedirectUri({
+        native: `${GOOGLE_REDIRECT_SCHEME}:/oauth2redirect`,
+      });
       const request = new AuthSession.AuthRequest({
         clientId,
         scopes: GOOGLE_DRIVE_SCOPES,

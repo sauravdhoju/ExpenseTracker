@@ -15,6 +15,9 @@ export const GOOGLE_OAUTH_CLIENT_ID_ANDROID =
   '735198954249-pdqq52aeuhmj4u0bbec743td4bb12itb.apps.googleusercontent.com';
 export const GOOGLE_OAUTH_CLIENT_ID_IOS = '';
 
+// Must match android.package in app.json and be listed in expo.scheme.
+export const GOOGLE_REDIRECT_SCHEME = 'com.sauravdhoju.expensetracker';
+
 export const GOOGLE_DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
 ];
