@@ -12,10 +12,12 @@
  * Until a client ID is set, Cloud Backup shows as "not configured" in the app.
  */
 export const GOOGLE_OAUTH_CLIENT_ID_ANDROID =
-  '467404006802-rvn3sqo145gheh4oi7m528burpf8aemu.apps.googleusercontent.com';
+  '735198954249-pdqq52aeuhmj4u0bbec743td4bb12itb.apps.googleusercontent.com';
 export const GOOGLE_OAUTH_CLIENT_ID_IOS = '';
 
-export const GOOGLE_DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file'];
+export const GOOGLE_DRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',
+];
 export const GOOGLE_DRIVE_BACKUP_FOLDER_NAME = 'ExpenseTracker Backups';
 
 export const BACKUP_INTERVAL_OPTIONS = [

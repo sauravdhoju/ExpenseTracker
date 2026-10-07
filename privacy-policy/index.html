@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy · ETracko</title>
+    <meta
+      name="description"
+      content="How ETracko, the offline expense tracker, handles your data: everything stays on your phone, with no account, no ads and no tracking."
+    />
+    <meta name="theme-color" content="#2790EE" />
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="wrap">
+        <div class="brand">
+          <img src="assets/icon.png" alt="ETracko app icon" />
+          <span>ETracko</span>
+        </div>
+        <h1>Privacy Policy</h1>
+        <p>
+          ETracko is a private, offline-first expense tracker. Your financial data stays on your phone. This page
+          explains exactly what the app handles, where it is stored, and how you stay in control.
+        </p>
+        <div class="meta">
+          <span>Effective 6 October 2026</span>
+          <span>Applies to the ETracko Android app</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <div class="summary" aria-label="Summary">
+        <div>
+          <b><i></i>Stored on your phone</b>
+          <p>No ETracko account and no ETracko server. Your entries live in a database on your device.</p>
+        </div>
+        <div>
+          <b><i></i>No ads, no tracking</b>
+          <p>No advertising, analytics or tracking tools are built in, and your data is never sold.</p>
+        </div>
+        <div>
+          <b><i></i>Automation is optional</b>
+          <p>SMS and notification reading is off until you turn it on, and it is processed on the device.</p>
+        </div>
+        <div>
+          <b><i></i>You can delete everything</b>
+          <p>Clear detection history, export a backup, or erase all data from inside the app at any time.</p>
+        </div>
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <h2>Contents</h2>
+        <ol>
+          <li><a href="#about">About this policy</a></li>
+          <li><a href="#data">Data the app handles</a></li>
+          <li><a href="#storage">Where your data is stored</a></li>
+          <li><a href="#automation">SMS &amp; notification automation</a></li>
+          <li><a href="#backup">Google Drive backup</a></li>
+          <li><a href="#permissions">Permissions</a></li>
+          <li><a href="#sharing">Sharing &amp; third parties</a></li>
+          <li><a href="#security">Security</a></li>
+          <li><a href="#control">Your choices &amp; deletion</a></li>
+          <li><a href="#children">Children</a></li>
+          <li><a href="#changes">Changes to this policy</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ol>
+      </nav>
+
+      <main>
+        <section id="about">
+          <h2><span class="num">1.</span>About this policy</h2>
+          <p>
+            This Privacy Policy describes how the ETracko mobile app (package
+            <code>com.sauravdhoju.expensetracker</code>), developed by Saurav Dhoju, handles information. ETracko is
+            designed so that the developer never receives your financial data. It does not require you to create an
+            account, and there is no ETracko server that your transactions are sent to.
+          </p>
+        </section>
+
+        <section id="data">
+          <h2><span class="num">2.</span>Data the app handles</h2>
+          <p>To work as an expense tracker, the app keeps the information you enter or choose to import:</p>
+          <ul>
+            <li>
+              <strong>Financial records:</strong> accounts and their balances, income, expenses, transfers, categories,
+              budgets, bills, recurring payments, savings goals, money lent to others and “forgotten money” entries.
+            </li>
+            <li>
+              <strong>Names you type:</strong> for example account names, transaction titles and notes, and the names of
+              people you lend money to.
+            </li>
+            <li>
+              <strong>Preferences:</strong> currency, calendar (AD/BS), theme, reminders, home-screen layout and similar
+              settings.
+            </li>
+            <li>
+              <strong>Automation data (only if you enable it):</strong> the text of bank SMS messages and payment-app
+              notifications that the app processes, plus the rules it learns (for example, which merchant belongs to
+              which category). See <a href="#automation">section 4</a>.
+            </li>
+          </ul>
+          <div class="note">
+            ETracko does <strong>not</strong> collect your contacts, location, photos, device identifiers or advertising
+            ID, and it does not ask for your bank login details.
+          </div>
+        </section>
+
+        <section id="storage">
+          <h2><span class="num">3.</span>Where your data is stored</h2>
+          <p>
+            All of the data above is stored locally on your device, in the app’s private database. It is not uploaded
+            to the developer or to any ETracko server. The only time data leaves your device is when
+            <strong>you</strong> choose to:
+          </p>
+          <ul>
+            <li>export a backup file and share or save it somewhere yourself, or</li>
+            <li>turn on Google Drive backup (<a href="#backup">section 5</a>).</li>
+          </ul>
+          <p>
+            Uninstalling the app removes its local database from your phone. Backups you exported or saved to Google
+            Drive remain wherever you put them until you delete them.
+          </p>
+        </section>
+
+        <section id="automation">
+          <h2><span class="num">4.</span>SMS &amp; notification automation</h2>
+          <p>
+            ETracko can optionally add transactions for you by reading bank SMS messages and notifications from payment
+            apps. This feature is <strong>off by default</strong> and only runs after you enable it and grant the
+            matching Android permission.
+          </p>
+          <h3>How it works</h3>
+          <ul>
+            <li>
+              Incoming SMS messages and notifications from the apps <strong>you select</strong> are checked on your
+              device to see whether they describe a payment or deposit.
+            </li>
+            <li>
+              Reading the amount, matching an account, choosing a category and checking for duplicates all happen
+              offline, on the phone. Message text is never sent to the developer or any server.
+            </li>
+            <li>
+              Messages that are not about money are ignored. Detected transactions are either added automatically or
+              placed in a Review Inbox for you to confirm, depending on your settings.
+            </li>
+            <li>
+              The app keeps a copy of the text of processed messages in a local detection history, so it can avoid
+              duplicates and show you why a transaction was created.
+            </li>
+          </ul>
+          <h3>Your controls</h3>
+          <ul>
+            <li>Turn automation, SMS reading or notification reading off at any time in <em>Settings → Automation</em>.</li>
+            <li>Choose exactly which apps’ notifications may be read.</li>
+            <li>
+              Delete stored message text with <em>Settings → Privacy → Clear detection history</em>, and learned rules
+              with <em>Clear automation rules</em>.
+            </li>
+            <li>Revoke the SMS or notification-access permission in Android settings whenever you like.</li>
+          </ul>
+        </section>
+
+        <section id="backup">
+          <h2><span class="num">5.</span>Google Drive backup</h2>
+          <p>
+            Cloud backup is optional and off by default. If you turn it on, you sign in with your Google account and
+            ETracko uploads a backup file of your app data to <strong>your own Google Drive</strong>, on the schedule
+            you choose. The developer cannot access your Drive or your backups.
+          </p>
+          <ul>
+            <li>
+              ETracko requests only the <code>drive.file</code> permission. This lets the app create and read the backup
+              files it made itself. It cannot see, open or change any other files in your Drive.
+            </li>
+            <li>
+              The sign-in token is stored in your device’s secure storage and is used only to upload and restore your
+              backups.
+            </li>
+            <li>
+              You can turn backup off in <em>Settings → Cloud backup</em>, delete the backup files from your Drive, and
+              remove ETracko’s access at any time from your Google Account’s security settings.
+            </li>
+          </ul>
+          <div class="note">
+            ETracko’s use and transfer of information received from Google APIs adheres to the
+            <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">
+              Google API Services User Data Policy</a
+            >, including the Limited Use requirements. Google user data is used only to provide the backup feature you
+            turned on. It is not used for advertising, not sold, and not read by people.
+          </div>
+        </section>
+
+        <section id="permissions">
+          <h2><span class="num">6.</span>Permissions</h2>
+          <p>The app asks for Android permissions only for the features that need them:</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Permission</th>
+                <th>Why it is used</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Receive SMS</td>
+                <td>To detect bank transaction messages, only when SMS automation is enabled.</td>
+              </tr>
+              <tr>
+                <td>Notification access</td>
+                <td>To read notifications from the payment apps you select, only when notification automation is enabled.</td>
+              </tr>
+              <tr>
+                <td>Notifications</td>
+                <td>To show your own reminders: daily tracking, bill due dates, budget alerts and loan reminders.</td>
+              </tr>
+              <tr>
+                <td>Biometrics</td>
+                <td>
+                  To unlock the app with your fingerprint or face if you enable app lock. Biometric data is handled by
+                  Android; the app never receives it.
+                </td>
+              </tr>
+              <tr>
+                <td>Files &amp; storage</td>
+                <td>To save exported backups and statements, and to open a backup file you pick for restoring.</td>
+              </tr>
+              <tr>
+                <td>Internet</td>
+                <td>Only for signing in to Google and uploading or restoring Google Drive backups.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="sharing">
+          <h2><span class="num">7.</span>Sharing &amp; third parties</h2>
+          <p>
+            The developer does not sell, rent or share your data, and the app contains no advertising, analytics or
+            crash-reporting services. Data reaches a third party only when you choose it:
+          </p>
+          <ul>
+            <li><strong>Google</strong>, if you enable Google Drive backup (governed by Google’s own privacy policy).</li>
+            <li>
+              <strong>Any app or person you share an export with</strong>, for example when you send a CSV statement or
+              JSON backup through the share sheet.
+            </li>
+          </ul>
+        </section>
+
+        <section id="security">
+          <h2><span class="num">8.</span>Security</h2>
+          <p>
+            Your data is kept in the app’s private storage, which other apps cannot read. You can add a PIN and
+            fingerprint or face unlock in <em>Settings → PIN &amp; biometric lock</em>, and hide amounts on screen with
+            one tap. Sign-in tokens are kept in Android’s secure storage.
+          </p>
+          <div class="note warn">
+            Exported backup files are not encrypted. Keep them somewhere private, and protect your phone with a screen
+            lock.
+          </div>
+        </section>
+
+        <section id="control">
+          <h2><span class="num">9.</span>Your choices &amp; deletion</h2>
+          <p>Because your data is on your device, you control it directly from the app:</p>
+          <ul>
+            <li><strong>Export</strong> a full JSON backup or CSV statements at any time.</li>
+            <li><strong>Edit or delete</strong> any individual entry.</li>
+            <li><strong>Clear detection history</strong> and <strong>automation rules</strong> in Settings → Privacy.</li>
+            <li>
+              <strong>Delete all data</strong> in Settings → Privacy permanently erases every account, transaction,
+              budget, goal and rule on the device.
+            </li>
+            <li>Uninstalling the app also removes its local data.</li>
+          </ul>
+          <p>
+            Since the developer holds no copy of your data, there is nothing for us to delete on our side. Backups in your
+            Google Drive can be deleted from Drive directly.
+          </p>
+        </section>
+
+        <section id="children">
+          <h2><span class="num">10.</span>Children</h2>
+          <p>
+            ETracko is a general personal-finance tool and is not directed at children under 13. The app does not
+            knowingly collect information from children, and it sends no personal information to the developer.
+          </p>
+        </section>
+
+        <section id="changes">
+          <h2><span class="num">11.</span>Changes to this policy</h2>
+          <p>
+            If the way the app handles data changes, this page will be updated and the effective date at the top will
+            change. Significant changes will also be noted in the app’s release notes.
+          </p>
+        </section>
+
+        <section id="contact">
+          <h2><span class="num">12.</span>Contact</h2>
+          <p>
+            Questions about this policy or your privacy? Contact the developer, Saurav Dhoju, at
+            <a href="mailto:sauravdhoju12@gmail.com">sauravdhoju12@gmail.com</a>.
+          </p>
+        </section>
+      </main>
+
+      <footer>
+        <div class="stripe"></div>
+        <p>© 2026 Saurav Dhoju · ETracko — Your money. Your phone. Your data.</p>
+      </footer>
+    </div>
+  </body>
+</html>
